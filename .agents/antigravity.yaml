@@ -1,0 +1,66 @@
+version: '2.0'
+project_name: 'Hermes-Core'
+
+agents:
+  product_manager:
+    model: "gemini-3.1-pro"
+    role: "Definidor de Requerimientos"
+    skills: [read_file, write_file]
+
+  architect:
+    model: "claude-opus-4-6-thinking"
+    role: "Arquitecto de Software"
+    skills: [read_file, write_file, ask_user]
+
+  backend_dev:
+    model: "claude-sonnet-4-6-thinking"
+    role: "Desarrollador Sr Python"
+    skills: [execute_code, write_file]
+
+  frontend_dev:
+    model: "claude-sonnet-4-6-thinking"
+    role: "Desarrollador Sr Vue/Nuxt"
+    skills: [execute_code, write_file]
+
+  qa_tester:
+    model: "gemini-3.7-flash"
+    role: "QA Tester"
+    skills: [execute_code, write_file] # Se agregó write_file para que pueda crear sus reportes
+
+# Políticas de Seguridad Estrictas
+rules:
+  # 1. Todos pueden leer el proyecto entero para tener contexto
+  - allow("read_file") 
+  
+  # 2. Restricciones de escritura por carpetas (El aislamiento que solicitaste)
+  - allow("write_file", agent="backend_dev", paths=["hermes-api/**", "hermes-db/**"])
+  - allow("write_file", agent="frontend_dev", paths=["hermes-platform/**"])
+  - allow("write_file", agents=["product_manager", "architect", "qa_tester"], paths=["hermes-spec/**"])
+  
+  # 3. Protección de terminal
+  - ask_user("execute_code")
+
+# Pipeline nativo actualizado con tus nuevas carpetas
+workflows:
+  implementar_feature:
+    description: "Flujo secuencial con aislamiento de directorios"
+    steps:
+      - name: "Paso 1: Definición de Flujos"
+        agent: product_manager
+        task: "Lee 'hermes-spec/SPEC.md'. Analiza la feature y genera 'hermes-spec/AUTH_SPECS.md'."
+      
+      - name: "Paso 2: Diseño y Credenciales"
+        agent: architect
+        task: "Lee 'hermes-spec/AUTH_SPECS.md'. Diseña el esquema. Usa la skill 'ask_user' para pedir las keys de Firebase y MongoDB. Guarda el diseño en 'hermes-spec/ARCHITECTURE.md' y las keys en '.env.local' en la raíz."
+      
+      - name: "Paso 3: Desarrollo Backend"
+        agent: backend_dev
+        task: "Lee 'hermes-spec/ARCHITECTURE.md'. Implementa la lógica en la carpeta 'hermes-api/' y los esquemas en 'hermes-db/'."
+      
+      - name: "Paso 4: Desarrollo Frontend"
+        agent: frontend_dev
+        task: "Lee 'hermes-spec/ARCHITECTURE.md' y el código en 'hermes-api/'. Crea los componentes reactivos en 'hermes-platform/'."
+      
+      - name: "Paso 5: Testing y Reporte"
+        agent: qa_tester
+        task: "Ejecuta pruebas. Genera un reporte de QA en 'hermes-spec/QA_REPORT.md' y cambia el estado a COMPLETADO en 'hermes-spec/SPEC.md'."
