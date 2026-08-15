@@ -2,15 +2,16 @@
 import ServiceTabButton from '~/components/atoms/ServiceTabButton.vue'
 import EmailListSection from '~/components/organisms/EmailListSection.vue'
 import DriveBucketSection from '~/components/organisms/DriveBucketSection.vue'
+import CalendarSection from '~/components/organisms/CalendarSection.vue'
 
 useHead({
   title: 'Administrador de Servicios | Hermes',
   meta: [
-    { name: 'description', content: 'Centro de comando para Gmail y Google Drive Bucket de Hermes.' }
+    { name: 'description', content: 'Centro de comando para Gmail, Google Drive y Google Calendar de Hermes.' }
   ]
 })
 
-const activeTab = ref<'emails' | 'media'>('emails')
+const activeTab = ref<'emails' | 'media' | 'calendar'>('emails')
 </script>
 
 <template>
@@ -27,7 +28,7 @@ const activeTab = ref<'emails' | 'media'>('emails')
           Administrador de Servicios
         </h1>
         <p class="page-subtitle">
-          Interacción directa con los servicios en la nube vinculados a tu cuenta: gestión de correos prioritarios de Gmail y almacenamiento centralizado en Google Drive.
+          Interacción directa con los servicios en la nube vinculados a tu cuenta: correos de Gmail, almacenamiento en Google Drive y gestión en tiempo real de Google Calendar.
         </p>
       </div>
 
@@ -57,6 +58,21 @@ const activeTab = ref<'emails' | 'media'>('emails')
             </svg>
           </template>
         </ServiceTabButton>
+
+        <ServiceTabButton
+          label="Calendario"
+          :active="activeTab === 'calendar'"
+          @click="activeTab = 'calendar'"
+        >
+          <template #icon>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+          </template>
+        </ServiceTabButton>
       </div>
     </div>
 
@@ -69,6 +85,9 @@ const activeTab = ref<'emails' | 'media'>('emails')
 
           <!-- Submodule 2: Multimedia (Google Drive Bucket) -->
           <DriveBucketSection v-else-if="activeTab === 'media'" />
+
+          <!-- Submodule 3: Calendario (Google Calendar) -->
+          <CalendarSection v-else-if="activeTab === 'calendar'" />
         </div>
       </Transition>
     </div>

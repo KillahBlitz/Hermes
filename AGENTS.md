@@ -128,18 +128,19 @@ hermes-api/
 
 ---
 
-## 7. Feature 4: Administrador de Servicios (Gmail & Drive Bucket) - IMPLEMENTADO
+## 7. Feature 4: Administrador de Servicios (Gmail, Drive Bucket & Google Calendar) - IMPLEMENTADO
 
 * **Especificación Completa**: Consulta `hermes-spec/04_services/SPEC_SERVICES.md`.
 * **Backend (`hermes-api`)**:
   - `src/services/gmail_service.py`: Consulta de correos destacados (`is:starred`) e importantes (`is:important`), lectura y papelera.
   - `src/services/drive_service.py`: Creación/verificación del bucket `hermes` con carpetas `multimedia` y `archivos`, navegación, subida multipart y vistas previas.
+  - `src/services/calendar_service.py`: Integración con Google Calendar API v3 (listado mensual/semanal, creación de eventos, actualización, eliminación y quickAdd por lenguaje natural).
   - `src/services/audit_service.py`: Registro inmutable en `service_audit_logs` (MongoDB).
-  - `src/app/endpoints/services.py`: 10 endpoints bajo `/api/v1/services/`.
+  - `src/app/endpoints/services.py`: 16 endpoints bajo `/api/v1/services/`.
 * **Frontend (`hermes-platform`)**:
-  - Selector dual de pestañas: **"Correos"** y **"Multimedia"** en `app/pages/services.vue`.
-  - Composables: `useGmailService.ts` y `useDriveBucket.ts`.
-  - Componentes: `EmailListSection`, `DriveBucketSection`, `EmailCard`, `DriveFileCard`, `DriveBreadcrumb`, `FileUploadZone`, `EmailDetailModal`, `DeleteConfirmModal`, `FilePreviewModal`.
+  - Selector triple de pestañas: **"Correos"**, **"Multimedia"** y **"Calendario"** en `app/pages/services.vue`.
+  - Composables: `useGmailService.ts`, `useDriveBucket.ts` y `useCalendarService.ts`.
+  - Componentes: `EmailListSection`, `DriveBucketSection`, `CalendarSection`, `CalendarEventCard`, `CalendarEventModal`, `EmailCard`, `DriveFileCard`, `DriveBreadcrumb`, `FileUploadZone`, `EmailDetailModal`, `DeleteConfirmModal`, `FilePreviewModal`.
 
 ---
 

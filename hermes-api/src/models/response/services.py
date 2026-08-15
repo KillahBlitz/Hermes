@@ -1,6 +1,6 @@
-from pydantic import BaseModel, Field
-from typing import List, Optional
 from datetime import datetime
+from typing import List, Optional
+from pydantic import BaseModel, Field
 
 
 # ── Gmail Models ──
@@ -95,6 +95,31 @@ class FileUploadResponse(BaseModel):
     mime_type: str
     size: Optional[str] = None
     folder_id: str
+
+
+# ── Google Calendar Models ──
+
+class CalendarEventResponse(BaseModel):
+    id: str
+    summary: str
+    description: Optional[str] = None
+    location: Optional[str] = None
+    start: str
+    end: str
+    is_all_day: bool = False
+    html_link: Optional[str] = None
+    status: str = "confirmed"
+    color_id: Optional[str] = None
+    attendees: List[str] = []
+    created: Optional[str] = None
+    updated: Optional[str] = None
+
+
+class CalendarEventListResponse(BaseModel):
+    events: List[CalendarEventResponse]
+    total: int = 0
+    time_min: Optional[str] = None
+    time_max: Optional[str] = None
 
 
 # ── Audit Models ──

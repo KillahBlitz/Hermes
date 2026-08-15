@@ -6,10 +6,11 @@ Este documento detalla los requerimientos funcionales, técnicos, arquitectónic
 
 ## 1. Objetivos del Módulo
 
-* Proveer un centro de comando unificado para interactuar directamente con los servicios en la nube de Google vinculados a la cuenta del usuario (**Gmail** y **Google Drive**).
-* Implementar un selector conmutable de alto impacto visual entre dos submódulos principales:
+* Proveer un centro de comando unificado para interactuar directamente con los servicios en la nube de Google vinculados a la cuenta del usuario (**Gmail**, **Google Drive** y **Google Calendar**).
+* Implementar un selector conmutable de alto impacto visual entre tres submódulos principales:
   1. **"Correos"**: Visualización exclusiva de correos electrónicos **importantes** y **destacados**, lectura en modal detallado, eliminación con diálogo de confirmación y registro obligatorio de movimientos en bitácora de auditoría.
   2. **"Multimedia"**: Almacenamiento tipo *Bucket Cloud* en el Google Drive del usuario bajo una carpeta raíz `"hermes"`, con estructura automática de subcarpetas (`"multimedia"` y `"archivos"`), carga de cualquier tipo de archivo y visualizadores interactivos con vista previa para imágenes, videos y documentos.
+  3. **"Calendario"**: Administración en tiempo real de eventos de **Google Calendar** con vista mensual interactiva, vista de agenda cronológica, creación rápida con lenguaje natural (`quickAdd`), programación completa con categorías de colores neón y sincronización inmediata con la cuenta de Google.
 * Cumplir con los estándares de diseño de Hermes: fondo dark mode profundo (`#0c0c0e`), acentos neón en **Azul (`#00E5FF`)** y **Rosa (`#FF007F`)**, efectos glassmorphism (`backdrop-filter: blur(18px)`) y micro-animaciones fluidas.
 
 ---
@@ -25,6 +26,7 @@ graph TD
     subgraph Selector["Selector de Submódulo (Tabs)"]
         TabEmails["Pestaña 1: Correos (Gmail)"]
         TabMedia["Pestaña 2: Multimedia (Google Drive Bucket)"]
+        TabCalendar["Pestaña 3: Calendario (Google Calendar)"]
     end
 
     subgraph EmailsModule["Submódulo Correos"]
@@ -42,11 +44,21 @@ graph TD
         AuditLogMedia["Registro de Movimiento en MongoDB"]
     end
 
+    subgraph CalendarModule["Submódulo Calendario"]
+        MonthGrid["Cuadrícula Mensual Interactiva"]
+        AgendaView["Vista de Agenda Cronológica"]
+        QuickAdd["Creación Rápida con Lenguaje Natural"]
+        EventModal["Modal de Programación / Edición"]
+        AuditLogCal["Registro de Movimiento en MongoDB"]
+    end
+
     ServicesView --> Selector
     Selector --> TabEmails
     Selector --> TabMedia
+    Selector --> TabCalendar
     TabEmails --> EmailsModule
     TabMedia --> MediaModule
+    TabCalendar --> CalendarModule
 ```
 
 ---

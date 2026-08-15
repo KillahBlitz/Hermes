@@ -2,10 +2,17 @@ import logging
 from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from src.database.mongo import get_credentials_collection
-from src.models.request.services import CreateFolderRequest
+from src.models.request.services import (
+    CalendarEventCreateRequest,
+    CalendarEventUpdateRequest,
+    CalendarQuickAddRequest,
+    CreateFolderRequest,
+)
 from src.models.response.services import (
     AuditLogListResponse,
     AuditLogResponse,
+    CalendarEventListResponse,
+    CalendarEventResponse,
     DriveBucketResponse,
     DriveFileListResponse,
     DriveFileResponse,
@@ -18,6 +25,7 @@ from src.models.response.services import (
     ServiceActionResponse,
 )
 from src.services.audit_service import audit_service
+from src.services.calendar_service import CalendarService
 from src.services.drive_service import DriveService
 from src.services.gmail_service import GmailService
 from src.utils.crypto import decrypt_token
@@ -357,7 +365,7 @@ async def get_file_preview(
 
 @router.get("/audit-logs", response_model=AuditLogListResponse)
 async def get_audit_logs(
-    service: Optional[str] = Query(None, regex="^(GMAIL|DRIVE)?$"),
+    service: Optional[str] = Query(None, regex="^(GMAIL|DRIVE|CALENDAR)?$"),
     limit: int = Query(50, ge=1, le=200),
     payload: Dict[str, Any] = Depends(get_current_user_payload),
 ):
@@ -369,3 +377,181 @@ async def get_audit_logs(
         limit=limit,
     )
     return AuditLogListResponse(logs=logs, total=len(logs))
+
+
+# ═══════════════════════════════════════════════════════════════
+#  GOOGLE CALENDAR ENDPOINTS
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("/calendar/events", response_model=CalendarEventListResponse)
+async def list_calendar_events(
+    time_min: Optional[str] = Query(None, description="Fecha/hora mínima (ISO 8601)"),
+    time_max: Optional[str] = Query(None, description="Fecha/hora máxima (ISO 8601)"),
+    q: Optional[str] = Query(None, description="Búsqueda por texto en eventos"),
+    max_results: int = Query(100, ge=1, le=250),
+    payload: Dict[str, Any] = Depends(get_current_user_payload),
+):
+    """Obtiene los eventos del Google Calendar del usuario."""
+    user_id = payload.get("sub")
+    access_token = await _get_user_access_token(user_id)
+
+    try:
+        cal = CalendarService(access_token)
+        events = cal.list_events(
+            time_min=time_min,
+            time_max=time_max,
+            q=q,
+            max_results=max_results,
+        )
+        return CalendarEventListResponse(
+            events=events,
+            total=len(events),
+            time_min=time_min,
+            time_max=time_max,
+        )
+    except Exception as e:
+        _handle_google_error(e, "Google Calendar")
+
+
+@router.post("/calendar/events", response_model=CalendarEventResponse, status_code=status.HTTP_201_CREATED)
+async def create_calendar_event(
+    req: CalendarEventCreateRequest,
+    payload: Dict[str, Any] = Depends(get_current_user_payload),
+):
+    """Crea un nuevo evento en Google Calendar y registra auditoría."""
+    user_id = payload.get("sub")
+    user_email = payload.get("email", "")
+    access_token = await _get_user_access_token(user_id)
+
+    try:
+        cal = CalendarService(access_token)
+        created = cal.create_event(req)
+
+        await audit_service.log_action(
+            user_id=user_id,
+            user_email=user_email,
+            service="CALENDAR",
+            action="CREATE_EVENT",
+            resource_id=created.get("id", ""),
+            resource_title=created.get("summary", ""),
+            details={
+                "start": created.get("start"),
+                "end": created.get("end"),
+                "location": created.get("location"),
+            },
+        )
+
+        return CalendarEventResponse(**created)
+    except Exception as e:
+        _handle_google_error(e, "Google Calendar")
+
+
+@router.get("/calendar/events/{event_id}", response_model=CalendarEventResponse)
+async def get_calendar_event(
+    event_id: str,
+    payload: Dict[str, Any] = Depends(get_current_user_payload),
+):
+    """Obtiene el detalle de un evento específico de Google Calendar."""
+    user_id = payload.get("sub")
+    access_token = await _get_user_access_token(user_id)
+
+    try:
+        cal = CalendarService(access_token)
+        item = cal.get_event(event_id)
+        if not item:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evento no encontrado")
+        return CalendarEventResponse(**item)
+    except Exception as e:
+        _handle_google_error(e, "Google Calendar")
+
+
+@router.put("/calendar/events/{event_id}", response_model=CalendarEventResponse)
+async def update_calendar_event(
+    event_id: str,
+    req: CalendarEventUpdateRequest,
+    payload: Dict[str, Any] = Depends(get_current_user_payload),
+):
+    """Actualiza un evento existente en Google Calendar."""
+    user_id = payload.get("sub")
+    user_email = payload.get("email", "")
+    access_token = await _get_user_access_token(user_id)
+
+    try:
+        cal = CalendarService(access_token)
+        updated = cal.update_event(event_id, req)
+
+        await audit_service.log_action(
+            user_id=user_id,
+            user_email=user_email,
+            service="CALENDAR",
+            action="UPDATE_EVENT",
+            resource_id=event_id,
+            resource_title=updated.get("summary", ""),
+            details={
+                "start": updated.get("start"),
+                "end": updated.get("end"),
+                "location": updated.get("location"),
+            },
+        )
+
+        return CalendarEventResponse(**updated)
+    except Exception as e:
+        _handle_google_error(e, "Google Calendar")
+
+
+@router.delete("/calendar/events/{event_id}", response_model=ServiceActionResponse)
+async def delete_calendar_event(
+    event_id: str,
+    payload: Dict[str, Any] = Depends(get_current_user_payload),
+):
+    """Elimina un evento de Google Calendar y registra auditoría."""
+    user_id = payload.get("sub")
+    user_email = payload.get("email", "")
+    access_token = await _get_user_access_token(user_id)
+
+    try:
+        cal = CalendarService(access_token)
+        cal.delete_event(event_id)
+
+        await audit_service.log_action(
+            user_id=user_id,
+            user_email=user_email,
+            service="CALENDAR",
+            action="DELETE_EVENT",
+            resource_id=event_id,
+            resource_title=f"Evento {event_id}",
+        )
+
+        return ServiceActionResponse(success=True, message="Evento eliminado exitosamente de Google Calendar.")
+    except Exception as e:
+        _handle_google_error(e, "Google Calendar")
+
+
+@router.post("/calendar/quick-add", response_model=CalendarEventResponse, status_code=status.HTTP_201_CREATED)
+async def quick_add_calendar_event(
+    req: CalendarQuickAddRequest,
+    payload: Dict[str, Any] = Depends(get_current_user_payload),
+):
+    """Creación rápida de evento mediante lenguaje natural en Google Calendar."""
+    user_id = payload.get("sub")
+    user_email = payload.get("email", "")
+    access_token = await _get_user_access_token(user_id)
+
+    try:
+        cal = CalendarService(access_token)
+        created = cal.quick_add_event(req.text)
+
+        await audit_service.log_action(
+            user_id=user_id,
+            user_email=user_email,
+            service="CALENDAR",
+            action="QUICK_ADD_EVENT",
+            resource_id=created.get("id", ""),
+            resource_title=created.get("summary", req.text),
+            details={"raw_text": req.text},
+        )
+
+        return CalendarEventResponse(**created)
+    except Exception as e:
+        _handle_google_error(e, "Google Calendar")
+
