@@ -191,17 +191,17 @@ CMD ["uvicorn", "src.app.main:app", "--host", "0.0.0.0", "--port", "8000", "--wo
 
 ### 5.2. Frontend Dockerfile (`hermes-platform/Dockerfile`)
 * **Construcción Multi-Stage** para optimizar el tamaño final de la imagen en servidores pequeños.
-* **Stage 1 (Builder)**: `node:20-alpine`
-  - Instala dependencias (`npm ci` o `npm install`).
+* **Stage 1 (Builder)**: `node:22-alpine` (requerido para compatibilidad con métodos ES2024 de PostCSS / Nuxt 4).
+  - Instala dependencias (`npm ci`).
   - Ejecuta `npm run build` (produce `.output/`).
-* **Stage 2 (Runner)**: `node:20-alpine`
+* **Stage 2 (Runner)**: `node:22-alpine`
   - Copia únicamente el artefacto optimizado `.output/`.
   - Configura variables de entorno `HOST=0.0.0.0` y `PORT=3000`.
   - Ejecuta `node .output/server/index.mjs`.
 
 ```dockerfile
-# Stage 1: Build
-FROM node:20-alpine AS builder
+# Stage 1: Build Nuxt 4 SSR
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -211,8 +211,8 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-# Stage 2: Production Runner
-FROM node:20-alpine AS runner
+# Stage 2: Minimal Production Runner
+FROM node:22-alpine AS runner
 
 WORKDIR /app
 
