@@ -1,0 +1,42 @@
+version: "3.8"
+
+services:
+  hermes-api:
+    container_name: hermes-api-prod
+    build:
+      context: ./hermes-api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ./hermes-api/.env
+    ports:
+      - "9003:8000"
+    networks:
+      - hermes-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  hermes-platform:
+    container_name: hermes-platform-prod
+    build:
+      context: ./hermes-platform
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ./hermes-platform/.env
+    ports:
+      - "3003:3000"
+    depends_on:
+      - hermes-api
+    networks:
+      - hermes-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+networks:
+  hermes-network:
+    driver: bridge

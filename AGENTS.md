@@ -141,3 +141,19 @@ hermes-api/
   - Selector dual de pestañas: **"Correos"** y **"Multimedia"** en `app/pages/services.vue`.
   - Composables: `useGmailService.ts` y `useDriveBucket.ts`.
   - Componentes: `EmailListSection`, `DriveBucketSection`, `EmailCard`, `DriveFileCard`, `DriveBreadcrumb`, `FileUploadZone`, `EmailDetailModal`, `DeleteConfirmModal`, `FilePreviewModal`.
+
+---
+
+## 8. Feature 0: CI/CD Pipeline & Despliegue (SPEC_DEPLOY.md) - IMPLEMENTADO
+
+* **Especificación Completa**: Consulta `hermes-spec/00_deploy/SPEC_DEPLOY.md`.
+* **Workflow**: `.github/workflows/main.yml`.
+* **Disparador**: Exclusivo al hacer `push` a la rama `main`.
+* **Runner**: GitHub Actions *Self-Hosted Runner* en el servidor de producción.
+* **Pipeline en 2 Fases**:
+  1. `preparar-deploy`: Validación de conectividad, runner y versiones de Docker / Docker Compose.
+  2. `deploy-prod`: Checkout del código, inyección de variables desde el host (`~/.env.hermesapi` y `~/.env.hermesplatform`), ejecución de `docker compose -p hermes-prod up -d --build --remove-orphans` y limpieza de imágenes no utilizadas.
+* **Dockerización & Puertos Host**:
+  - `hermes-api/Dockerfile`: Base `python:3.11-slim` expuesta al host en **puerto 9003** (`9003:8000`).
+  - `hermes-platform/Dockerfile`: Multi-stage `node:20-alpine` (SSR a `.output`) expuesta al host en **puerto 3003** (`3003:3000`).
+  - `docker-compose.yml`: Orquestación de servicios en red `hermes-network` con límites de memoria de 512MB adaptados a servidores pequeños.

@@ -1,0 +1,52 @@
+name: CI/CD Pipeline - Hermes Production
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  preparar-deploy:
+    name: 🔍 Preparando deploy
+    runs-on: self-hosted
+    steps:
+      - name: ⚡ Validar conexión y entorno del Runner
+        run: |
+          echo "=========================================="
+          echo "  Verificando estado del runner y entorno"
+          echo "=========================================="
+          echo "Directorio de trabajo actual: $PWD"
+          echo "Usuario ejecutando: $(whoami)"
+          docker --version
+          docker compose version
+          echo "¡El runner está listo y conectado correctamente!"
+
+  deploy-prod:
+    name: 🚀 Deploy To Prod
+    needs: preparar-deploy
+    runs-on: self-hosted
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: 📥 Checkout del código
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Preparar variables de entorno (producción)
+        run: |
+          echo "Copiando variables de entorno desde el host..."
+          cp ~/.env.hermesplatform ./hermes-platform/.env
+          cp ~/.env.hermesapi ./hermes-api/.env
+          echo "Variables de entorno inyectadas exitosamente."
+
+      - name: 🚀 Desplegar Contenedores (Backend 9003 & Frontend 3003)
+        run: |
+          echo "Deteniendo contenedores previos si existen..."
+          docker compose -p hermes-prod down --remove-orphans || true
+          
+          echo "Construyendo y levantando la plataforma en segundo plano..."
+          docker compose -p hermes-prod up -d --build --remove-orphans
+
+      - name: 🧹 Limpieza de imágenes huérfanas
+        run: |
+          echo "Limpiando imágenes Docker no utilizadas para liberar espacio..."
+          docker image prune -f
+          echo "¡Despliegue de Hermes en producción completado con éxito!"
