@@ -135,13 +135,17 @@ jobs:
           cp ~/.env.hermesapi ./hermes-api/.env
           echo "Variables de entorno inyectadas exitosamente."
 
-      - name: 🚀 Desplegar Contenedores (API & Platform)
+      - name: 🚀 Desplegar Backend (FastAPI - Puerto 9003)
         run: |
-          echo "Deteniendo contenedores previos si existen..."
-          docker compose -p hermes-prod down --remove-orphans || true
-          
-          echo "Construyendo y levantando la plataforma en segundo plano..."
-          docker compose -p hermes-prod up -d --build --remove-orphans
+          echo "Desplegando servicio Backend (hermes-api-prod) en puerto 9003..."
+          docker rm -f hermes-api-prod || true
+          docker compose -p hermes-prod up -d --build --remove-orphans hermes-api
+
+      - name: 🚀 Desplegar Frontend (Nuxt 4 - Puerto 3003)
+        run: |
+          echo "Desplegando servicio Frontend (hermes-platform-prod) en puerto 3003..."
+          docker rm -f hermes-platform-prod || true
+          docker compose -p hermes-prod up -d --build --remove-orphans hermes-platform
 
       - name: 🧹 Limpieza de imágenes huérfanas
         run: |
