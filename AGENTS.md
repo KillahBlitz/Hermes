@@ -155,5 +155,36 @@ hermes-api/
   2. `deploy-prod`: Checkout del código, inyección de variables desde el host (`~/.env.hermesapi` y `~/.env.hermesplatform`), ejecución de `docker compose -p hermes-prod up -d --build --remove-orphans` y limpieza de imágenes no utilizadas.
 * **Dockerización & Puertos Host**:
   - `hermes-api/Dockerfile`: Base `python:3.11-slim` expuesta al host en **puerto 9003** (`9003:8000`).
-  - `hermes-platform/Dockerfile`: Multi-stage `node:20-alpine` (SSR a `.output`) expuesta al host en **puerto 3003** (`3003:3000`).
+  - `hermes-platform/Dockerfile`: Multi-stage `node:22-alpine` (SSR a `.output`) expuesta al host en **puerto 3003** (`3003:3000`).
   - `docker-compose.yml`: Orquestación de servicios en red `hermes-network` con límites de memoria de 512MB adaptados a servidores pequeños.
+
+---
+
+## 9. Feature 5: Administración Económica (SPEC_ECONOMY.md) - IMPLEMENTADO
+
+* **Especificación Completa**: Consulta `hermes-spec/05_economy/SPEC_ECONOMY.md`.
+* **Ruta Frontend**: `/finance`
+* **Backend (`hermes-api`)**:
+  - `src/services/finance_service.py`: CRUD de transacciones y categorías, agregaciones para KPIs de balance, comparativas MoM, desglose por categoría y tendencias semestrales.
+  - `src/app/endpoints/finance.py`: 12 endpoints REST bajo `/api/v1/finance/`.
+* **Frontend (`hermes-platform`)**:
+  - `app/composables/useFinance.ts`: Manejo reactivo de estado financiero, meses, filtros y paginación.
+  - Componentes: `MoneyBadge`, `PercentageIndicator`, `CategoryTag`, `FinanceKpiCard`, `MonthSelector`, `InsightBanner`, `TransactionRow`, `FinanceTrendsChart`, `CategoryDonutChart`, `TransactionListSection`, `TransactionModal`, `CategoryManagerModal`.
+  - Página: `app/pages/finance.vue`.
+* **Colecciones en MongoDB**: `finance_transactions` y `finance_categories`.
+
+---
+
+## 10. Feature 6: Tableros Inteligentes (SPEC_TABLERO.md)
+
+* **Especificación Completa**: Consulta `hermes-spec/06_tablero/SPEC_TABLERO.md`.
+* **Ruta Frontend**: `/boards`
+* **3 Herramientas Principales**:
+  1. **Tablero de Actividades**:
+     - Kanban de 4 columnas (`ToDo`, `In Progress`, `To Be Tested`, `Done`).
+     - Sub-vistas: Tablero Activo, Backlog y Finalizados (+7 días tras completarse).
+     - Tipos de tarea: `Mejora` (Verde), `Urgente` (Rosa), `Pendiente` (Amarillo), `Análisis` (Azul).
+     - Niveles de complejidad (`XS`, `S`, `M`, `L`, `XL`) y CRUD de Épicas (`Escuela`, `Trabajo`, `Cursos`).
+  2. **Tablero de Hábitos (21 Días)**: Matriz interactiva de 21 casillas por hábito, contador de racha (`streak`), porcentaje de cumplimiento y consolidación de hábitos.
+  3. **Pizarrón de Ideas**: Canvas interactivo con Post-its posicionables libremente en cualquier coordenada X/Y, cambio dinámico de color neón y edición de contenido.
+* **Colecciones en MongoDB**: `board_epics`, `board_tasks`, `board_habits`, `board_sticky_notes`.

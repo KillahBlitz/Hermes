@@ -3,6 +3,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from src.app.endpoints.auth import router as auth_router
+from src.app.endpoints.boards import router as boards_router
+from src.app.endpoints.finance import router as finance_router
 from src.app.endpoints.services import router as services_router
 from src.config.settings import get_settings
 from src.database.mongo import db_manager
@@ -43,6 +45,7 @@ if not origins:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|100\.\d{1,3}\.\d{1,3}\.\d{1,3}|.*\.ts\.net)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -51,6 +54,8 @@ app.add_middleware(
 # Register API routers
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(services_router, prefix="/api/v1")
+app.include_router(finance_router, prefix="/api/v1")
+app.include_router(boards_router, prefix="/api/v1")
 
 
 @app.get("/", tags=["Health"])

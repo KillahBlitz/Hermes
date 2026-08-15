@@ -48,3 +48,27 @@ def get_credentials_collection() -> Optional[AsyncIOMotorCollection]:
 def get_audit_logs_collection() -> Optional[AsyncIOMotorCollection]:
     return db_manager.get_collection("service_audit_logs")
 
+
+def get_finance_transactions_collection() -> Optional[AsyncIOMotorCollection]:
+    return db_manager.get_collection("finance_transactions")
+
+
+def get_finance_categories_collection() -> Optional[AsyncIOMotorCollection]:
+    return db_manager.get_collection("finance_categories")
+
+
+def get_board_epics_collection() -> Optional[AsyncIOMotorCollection]:
+    return db_manager.get_collection("board_epics")
+
+
+def get_board_tasks_collection() -> Optional[AsyncIOMotorCollection]:
+    return db_manager.get_collection("board_tasks")
+
+
+def get_board_habits_collection() -> Optional[AsyncIOMotorCollection]:
+    return db_manager.get_collection("board_habits")
+
+
+def get_board_sticky_notes_collection() -> Optional[AsyncIOMotorCollection]:
+    return db_manager.get_collection("board_sticky_notes")
+
