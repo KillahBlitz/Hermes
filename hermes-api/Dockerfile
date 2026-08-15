@@ -7,11 +7,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar e instalar dependencias de Python
-COPY assets/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# Crear entorno virtual de Python y configurarlo en el PATH
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
-# Copiar el código fuente de la API
+# Instalar dependencias dentro del entorno virtual
+COPY assets/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Copiar el código fuente
 COPY . .
 
 EXPOSE 8000
