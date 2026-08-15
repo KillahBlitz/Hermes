@@ -213,3 +213,74 @@ body {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
+
+/* Neon Action Buttons */
+.btn-neon-blue {
+  background: rgba(0, 229, 255, 0.15);
+  border: 1px solid var(--hermes-accent-blue);
+  color: var(--hermes-accent-blue);
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.25);
+  font-family: inherit;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.btn-neon-blue:hover {
+  background: rgba(0, 229, 255, 0.28);
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.45);
+  transform: translateY(-1px);
+}
+
+.btn-neon-pink {
+  background: rgba(255, 0, 127, 0.15);
+  border: 1px solid var(--hermes-accent-pink);
+  color: var(--hermes-accent-pink);
+  box-shadow: 0 0 12px rgba(255, 0, 127, 0.25);
+  font-family: inherit;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.btn-neon-pink:hover {
+  background: rgba(255, 0, 127, 0.28);
+  box-shadow: 0 0 20px rgba(255, 0, 127, 0.45);
+  transform: translateY(-1px);
+}
+
+.btn-neon-teal {
+  background: rgba(0, 255, 198, 0.15);
+  border: 1px solid var(--hermes-accent-teal);
+  color: var(--hermes-accent-teal);
+  box-shadow: 0 0 12px rgba(0, 255, 198, 0.25);
+  font-family: inherit;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.btn-neon-teal:hover {
+  background: rgba(0, 255, 198, 0.28);
+  box-shadow: 0 0 20px rgba(0, 255, 198, 0.45);
+  transform: translateY(-1px);
+}
+

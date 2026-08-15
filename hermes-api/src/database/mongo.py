@@ -84,3 +84,16 @@ def get_todo_sections_collection() -> Optional[AsyncIOMotorCollection]:
 def get_todo_tasks_collection() -> Optional[AsyncIOMotorCollection]:
     return db_manager.get_collection("todo_tasks")
 
+
+def get_progress_roadmaps_collection() -> Optional[AsyncIOMotorCollection]:
+    return db_manager.get_collection("progress_roadmaps")
+
+
+def get_progress_milestones_collection() -> Optional[AsyncIOMotorCollection]:
+    return db_manager.get_collection("progress_milestones")
+
+
+def get_progress_notes_collection() -> Optional[AsyncIOMotorCollection]:
+    return db_manager.get_collection("progress_notes")
+
+
