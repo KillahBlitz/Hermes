@@ -30,12 +30,20 @@ jobs:
       - name: 📥 Checkout del código
         uses: actions/checkout@v4
 
-      - name: ⚙️ Preparar variables de entorno (producción)
+      - name: ⚙️ Preparar variables de entorno y credenciales (producción)
         run: |
           echo "Copiando variables de entorno desde el host..."
           cp ~/.env.hermesplatform ./hermes-platform/.env
           cp ~/.env.hermesapi ./hermes-api/.env
-          echo "Variables de entorno inyectadas exitosamente."
+
+          echo "Copiando credenciales de Firebase Admin SDK..."
+          mkdir -p ./hermes-api/config
+          if [ -f /home/kinasis-root/serviceAccountKey.json ]; then
+            cp /home/kinasis-root/serviceAccountKey.json ./hermes-api/config/serviceAccountKey.json
+          elif [ -f ~/serviceAccountKey.json ]; then
+            cp ~/serviceAccountKey.json ./hermes-api/config/serviceAccountKey.json
+          fi
+          echo "Variables de entorno y credenciales inyectadas exitosamente."
 
       - name: 🚀 Desplegar Backend (FastAPI - Puerto 9003)
         run: |

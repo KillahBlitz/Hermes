@@ -128,12 +128,20 @@ jobs:
       - name: 📥 Checkout del código
         uses: actions/checkout@v4
 
-      - name: ⚙️ Preparar variables de entorno (producción)
+      - name: ⚙️ Preparar variables de entorno y credenciales (producción)
         run: |
           echo "Copiando variables de entorno desde el host..."
           cp ~/.env.hermesplatform ./hermes-platform/.env
           cp ~/.env.hermesapi ./hermes-api/.env
-          echo "Variables de entorno inyectadas exitosamente."
+
+          echo "Copiando credenciales de Firebase Admin SDK..."
+          mkdir -p ./hermes-api/config
+          if [ -f /home/kinasis-root/serviceAccountKey.json ]; then
+            cp /home/kinasis-root/serviceAccountKey.json ./hermes-api/config/serviceAccountKey.json
+          elif [ -f ~/serviceAccountKey.json ]; then
+            cp ~/serviceAccountKey.json ./hermes-api/config/serviceAccountKey.json
+          fi
+          echo "Variables de entorno y credenciales inyectadas exitosamente."
 
       - name: 🚀 Desplegar Backend (FastAPI - Puerto 9003)
         run: |
@@ -161,8 +169,9 @@ jobs:
 ### 5.1. Backend Dockerfile (`hermes-api/Dockerfile`)
 * **Imagen Base**: `python:3.11-slim`
 * **Directorio de Trabajo**: `/app`
-* **Instalación de Dependencias**: Vía `assets/requirements.txt` sin caché (`--no-cache-dir`).
-* **Exposición**: Puerto `8000`.
+* **Entorno Virtual**: Creación de virtualenv `/opt/venv` configurado en `PATH` para aislamiento completo de dependencias.
+* **Instalación de Dependencias**: Vía `assets/requirements.txt` (incluyendo `python-multipart` para subida de archivos).
+* **Exposición**: Puerto `8000` (mapeado al puerto host `9003`).
 * **Comando de Inicio**: `uvicorn src.app.main:app --host 0.0.0.0 --port 8000 --workers 2`.
 
 ```dockerfile
@@ -170,16 +179,21 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Instalar dependencias del sistema necesarias
+# Instalar dependencias mínimas del sistema
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar requerimientos e instalar dependencias de Python
-COPY assets/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# Crear entorno virtual de Python y configurarlo en el PATH
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
-# Copiar código fuente
+# Instalar dependencias dentro del entorno virtual
+COPY assets/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Copiar el código fuente
 COPY . .
 
 EXPOSE 8000
