@@ -115,13 +115,12 @@ hermes-api/
 ## 6. Feature 2: Menú Lateral Retráctil y Fijo (BarMenu)
 
 * **Especificación Completa**: Consulta `hermes-spec/02_barmenu/SPEC_BARMENU.md`.
-* **6 Módulos Obligatorios**:
+* **5 Módulos Obligatorios**:
   1. `Administrador de servicios` (`/services`)
   2. `Administración económica` (`/finance`)
   3. `Tableros` (`/boards`)
   4. `Listas` (`/lists`)
-  5. `Progreso profesional` (`/career`)
-  6. `Conocimiento` (`/knowledge`)
+  5. `Progreso` (`/progress`) - *Unificación de Progreso profesional y Conocimiento*
 * **Comportamiento y Persistencia**:
   - Dual: Fijo (`isPinned = true`, `260px`, empuja layout) vs. Colapsado (`isPinned = false`, `72px` compacto con hover flotante).
   - Persistencia del estado con composable `useSidebarState` y `localStorage`.
@@ -175,16 +174,58 @@ hermes-api/
 
 ---
 
-## 10. Feature 6: Tableros Inteligentes (SPEC_TABLERO.md)
+## 10. Feature 6: Tableros Inteligentes (SPEC_TABLERO.md) - IMPLEMENTADO
 
 * **Especificación Completa**: Consulta `hermes-spec/06_tablero/SPEC_TABLERO.md`.
 * **Ruta Frontend**: `/boards`
 * **3 Herramientas Principales**:
   1. **Tablero de Actividades**:
-     - Kanban de 4 columnas (`ToDo`, `In Progress`, `To Be Tested`, `Done`).
+     - Kanban de 4 columnas (`ToDo`, `In Progress`, `To Be Tested`, `Done`) con Drag & Drop nativo.
      - Sub-vistas: Tablero Activo, Backlog y Finalizados (+7 días tras completarse).
      - Tipos de tarea: `Mejora` (Verde), `Urgente` (Rosa), `Pendiente` (Amarillo), `Análisis` (Azul).
      - Niveles de complejidad (`XS`, `S`, `M`, `L`, `XL`) y CRUD de Épicas (`Escuela`, `Trabajo`, `Cursos`).
   2. **Tablero de Hábitos (21 Días)**: Matriz interactiva de 21 casillas por hábito, contador de racha (`streak`), porcentaje de cumplimiento y consolidación de hábitos.
   3. **Pizarrón de Ideas**: Canvas interactivo con Post-its posicionables libremente en cualquier coordenada X/Y, cambio dinámico de color neón y edición de contenido.
 * **Colecciones en MongoDB**: `board_epics`, `board_tasks`, `board_habits`, `board_sticky_notes`.
+
+---
+
+## 11. Feature 7: Listas & Deseos (SPEC_LISTS.md) - IMPLEMENTADO
+
+* **Especificación Completa**: Consulta `hermes-spec/07_LISTAS/SPEC_LISTS.md`.
+* **Ruta Frontend**: `/lists`
+* **2 Herramientas Principales**:
+  1. **Lista de Deseos (Wishlist)**:
+     - Catálogo de compras futuras con nombre, precio, descripción, fotos, enlace de compra (URL externa), prioridad y estado (`PENDING`, `PURCHASED`, `ARCHIVED`).
+     - Almacenamiento de fotos en Google Drive bajo la carpeta `hermes/whitelist`.
+  2. **Lista de Tareas (Estilo Microsoft To-Do)**:
+     - Tareas repetitivas y rutinarias organizadas por secciones/categorías temáticas.
+     - Puntaje de dificultad/esfuerzo (1, 2, 3, 5 puntos), frecuencia de repetición (`Diaria`, `Lunes a Viernes`, `Semanal`, `Mensual`, `Ninguna`), fechas límite y checkbox rápido de completado.
+* **Colecciones en MongoDB**: `wishlist_items`, `todo_sections`, `todo_tasks`.
+* **Backend (`hermes-api`)**:
+  - `src/services/lists_service.py`: Lógica de Wishlist (CRUD, KPIs monetarios, subida multipart a Google Drive `hermes/whitelist`), Secciones To-Do (seeding atómico) y Tareas To-Do (creación ágil, conmutación de estado).
+  - `src/app/endpoints/lists.py`: 15 endpoints REST bajo `/api/v1/lists/`.
+* **Frontend (`hermes-platform`)**:
+  - `app/composables/useLists.ts`: Estado reactivo y métodos CRUD para Wishlist y To-Do.
+  - Componentes: `WishlistPriceTag`, `WishlistPriorityBadge`, `DifficultyPointsPill`, `WishlistCard`, `TodoTaskRow`, `TodoSectionSidebar`, `WishlistSection`, `TodoSection`, `WishlistModal`, `WishlistPhotoUploadModal`, `TodoSectionModal`, `TodoTaskModal`.
+  - Página: `app/pages/lists.vue`.
+
+---
+
+## 12. Feature 8: Módulo de Progreso (SPEC_PROFETIONAL.md) - ESPECIFICADO
+
+* **Especificación Completa**: Consulta `hermes-spec/08_profesional/SPEC_PROFETIONAL.md`.
+* **Ruta Frontend**: `/progress` (Unifica Progreso profesional y Conocimiento).
+* **3 Herramientas Principales**:
+  1. **Árbol de Mapas (Roadmap Canvas)**:
+     - Pizarrón interactivo infinito/expandible con nodos modulares conectados mediante flechas/aristas.
+     - Al hacer clic en un rectángulo/nodo, se abre un editor/visor Markdown (`.md`) asociado para documentar bitácoras y apuntes técnicos de ese módulo.
+  2. **Gestor de Hitos (Milestones Tracker)**:
+     - Rastreador visual de proyectos de gran escala (Titulación, Certificaciones AWS, Exámenes críticos de materias como probabilidad).
+     - Cuentas regresivas (*deadlines*) y barras de progreso porcentual ponderadas por temarios/entregables.
+  3. **Red de Enlaces Zettelkasten (Knowledge Vault & Graph)**:
+     - Bóveda de notas Markdown interconectadas con sintaxis de wikilinks `[[NombreDeNota]]` y `#tags`.
+     - Grafo de conocimiento 2D interactivo con simulación de fuerzas y backlinks automáticos.
+* **Colecciones en MongoDB**: `progress_roadmaps`, `progress_milestones`, `progress_notes`.
+
+

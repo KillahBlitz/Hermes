@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.app.endpoints.auth import router as auth_router
 from src.app.endpoints.boards import router as boards_router
 from src.app.endpoints.finance import router as finance_router
+from src.app.endpoints.lists import router as lists_router
 from src.app.endpoints.services import router as services_router
 from src.config.settings import get_settings
 from src.database.mongo import db_manager
@@ -56,6 +57,7 @@ app.include_router(auth_router, prefix="/api/v1")
 app.include_router(services_router, prefix="/api/v1")
 app.include_router(finance_router, prefix="/api/v1")
 app.include_router(boards_router, prefix="/api/v1")
+app.include_router(lists_router, prefix="/api/v1")
 
 
 @app.get("/", tags=["Health"])

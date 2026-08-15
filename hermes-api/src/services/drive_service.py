@@ -41,6 +41,15 @@ class DriveService:
             "folders": folders,
         }
 
+    def ensure_whitelist_folder(self) -> str:
+        """
+        Verify / create the 'whitelist' folder inside hermes root folder for Wishlist item photos.
+        Returns the folder ID of 'whitelist'.
+        """
+        root_id = self._find_or_create_folder(HERMES_ROOT_FOLDER, parent_id="root")
+        whitelist_id = self._find_or_create_folder("whitelist", parent_id=root_id)
+        return whitelist_id
+
     # ── List Folder Contents ──
 
     def list_folder_contents(self, folder_id: str) -> Dict[str, Any]:
@@ -93,14 +102,16 @@ class DriveService:
             uploaded = self.service.files().create(
                 body=file_metadata,
                 media_body=media,
-                fields="id,name,mimeType,size",
+                fields="id,name,mimeType,size,webViewLink,thumbnailLink",
             ).execute()
             logger.info(f"Uploaded file '{filename}' (ID: {uploaded['id']}) to folder {folder_id}")
             return {
                 "id": uploaded["id"],
                 "name": uploaded["name"],
                 "mime_type": uploaded.get("mimeType", mime_type),
-                "size": uploaded.get("size"),
+                "size": uploaded.get("size") or str(len(file_content)),
+                "thumbnail_link": uploaded.get("thumbnailLink"),
+                "web_view_link": uploaded.get("webViewLink"),
                 "folder_id": folder_id,
             }
         except Exception as e:

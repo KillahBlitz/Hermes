@@ -72,3 +72,15 @@ def get_board_habits_collection() -> Optional[AsyncIOMotorCollection]:
 def get_board_sticky_notes_collection() -> Optional[AsyncIOMotorCollection]:
     return db_manager.get_collection("board_sticky_notes")
 
+
+def get_wishlist_collection() -> Optional[AsyncIOMotorCollection]:
+    return db_manager.get_collection("wishlist_items")
+
+
+def get_todo_sections_collection() -> Optional[AsyncIOMotorCollection]:
+    return db_manager.get_collection("todo_sections")
+
+
+def get_todo_tasks_collection() -> Optional[AsyncIOMotorCollection]:
+    return db_manager.get_collection("todo_tasks")
+
