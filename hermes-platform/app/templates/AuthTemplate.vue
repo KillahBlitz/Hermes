@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import HermesLogo from '~/components/atoms/HermesLogo.vue'
+import HermesParticles from '~/components/atoms/HermesParticles.vue'
+
 interface Props {
   title?: string
   subtitle?: string
@@ -18,6 +21,7 @@ withDefaults(defineProps<Props>(), {
       <div class="ambient-orb ambient-orb-blue" />
       <div class="ambient-orb ambient-orb-pink" />
       <div class="ambient-orb ambient-orb-teal" />
+      <HermesParticles :particle-count="55" />
     </div>
 
     <!-- Centered Glass Panel Card -->
@@ -25,14 +29,18 @@ withDefaults(defineProps<Props>(), {
       <div class="glass-panel glass-panel-glow p-4 p-md-5">
         <!-- Brand Header -->
         <header class="text-center mb-4">
+          <div class="logo-hero-container mb-3">
+            <HermesLogo size="lg" :animated="true" :glow="true" />
+          </div>
+
           <div class="brand-badge mb-3">
             <span class="brand-dot-blue" />
             <span class="brand-dot-pink" />
-            <span class="brand-badge-text">Hermes Auth</span>
+            <span class="brand-badge-text">Hermes Platform</span>
           </div>
 
           <h1 class="brand-title mb-2">
-            <span class="text-gradient-brand">Hermes</span> Platform
+            <span class="text-gradient-brand">Hermes</span>
           </h1>
           <p class="brand-subtitle text-muted">
             {{ subtitle }}

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import HermesLogo from '~/components/atoms/HermesLogo.vue'
 import SidebarPinToggle from '~/components/atoms/SidebarPinToggle.vue'
 import SidebarItem from '~/components/molecules/SidebarItem.vue'
 import SidebarUserCard from '~/components/molecules/SidebarUserCard.vue'
@@ -58,18 +59,8 @@ const navItems = [
     <!-- Header: Logo + Pin -->
     <div class="sidebar-header">
       <NuxtLink to="/" class="sidebar-brand" @click="closeMobile">
-        <!-- Hermes glyph / isotipo -->
-        <svg class="brand-glyph" width="28" height="28" viewBox="0 0 32 32" fill="none">
-          <defs>
-            <linearGradient id="hermesBrandGradient" x1="0" y1="0" x2="32" y2="32">
-              <stop offset="0%" stop-color="#00E5FF" />
-              <stop offset="100%" stop-color="#FF007F" />
-            </linearGradient>
-          </defs>
-          <path d="M16 2L4 8v16l12 6 12-6V8L16 2z" stroke="url(#hermesBrandGradient)" stroke-width="2" fill="none" />
-          <path d="M16 8l-6 3v10l6 3 6-3V11l-6-3z" fill="url(#hermesBrandGradient)" opacity="0.25" />
-          <path d="M16 14l-3 1.5v5l3 1.5 3-1.5v-5L16 14z" fill="url(#hermesBrandGradient)" opacity="0.6" />
-        </svg>
+        <!-- New Hermes Logo -->
+        <HermesLogo size="sm" :animated="true" />
 
         <span class="brand-text">
           <span class="brand-name">Hermes</span>

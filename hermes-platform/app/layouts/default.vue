@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import HermesSidebar from '~/components/organisms/HermesSidebar.vue'
+import HermesParticles from '~/components/atoms/HermesParticles.vue'
 
 const { isPinned, isExpanded, toggleMobile } = useSidebarState()
 const { isAuthenticated } = useAuth()
@@ -15,12 +16,13 @@ onMounted(() => {
 
 <template>
   <div class="layout-dashboard">
-    <!-- Ambient Background -->
+    <!-- Ambient Background with Interactive Particles -->
     <div class="ambient-background">
       <div class="ambient-grid" />
       <div class="ambient-orb ambient-orb-blue" />
       <div class="ambient-orb ambient-orb-pink" />
       <div class="ambient-orb ambient-orb-teal" />
+      <HermesParticles :particle-count="40" />
     </div>
 
     <!-- Sidebar -->
