@@ -1,3 +1,7 @@
+skills/
+serviceAccountKey.json
+__init__.py
+
 logs
 *.log
 npm-debug.log*
