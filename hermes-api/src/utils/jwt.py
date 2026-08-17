@@ -62,3 +62,18 @@ def get_current_user_payload(
             headers={"WWW-Authenticate": "Bearer"},
         )
     return decode_access_token(credentials.credentials)
+
+
+def get_current_user_from_query_or_header(
+    token: Optional[str] = None,
+    credentials: Optional[HTTPAuthorizationCredentials] = Security(security)
+) -> Dict[str, Any]:
+    """Allows extracting session JWT from either query parameter '?token=...' or Authorization header."""
+    raw_token = token or (credentials.credentials if credentials else None)
+    if not raw_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No se proporcionó token de autenticación",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return decode_access_token(raw_token)

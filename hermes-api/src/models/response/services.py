@@ -70,6 +70,7 @@ class DriveBucketResponse(BaseModel):
     root_name: str = "hermes"
     multimedia_id: str
     archivos_id: str
+    whitelist_id: Optional[str] = None
     folders: List[DriveFileResponse] = []
 
 

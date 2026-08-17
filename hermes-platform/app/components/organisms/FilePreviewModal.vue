@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { ref, computed, watch } from 'vue'
 import type { DriveFile, PreviewInfo } from '~/composables/useDriveBucket'
+import { useDriveBucket } from '~/composables/useDriveBucket'
 
 const props = defineProps<{
   isOpen: boolean
@@ -11,6 +13,13 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'close'): void
 }>()
+
+const { getDriveFileContentUrl } = useDriveBucket()
+const imageLoadError = ref(false)
+
+watch(() => props.file, () => {
+  imageLoadError.value = false
+})
 
 const fileCategory = computed(() => {
   if (!props.file) return 'file'
@@ -28,6 +37,11 @@ const previewUrl = computed(() => {
     return props.previewInfo.web_view_link.replace(/\/view(\?.*)?$/, '/preview')
   }
   return ''
+})
+
+const imagePreviewSrc = computed(() => {
+  if (imageLoadError.value || !props.file) return ''
+  return getDriveFileContentUrl(props.file.id) || props.previewInfo?.thumbnail_link || previewUrl.value
 })
 
 const directDownloadUrl = computed(() => {
@@ -86,10 +100,18 @@ const directDownloadUrl = computed(() => {
             <!-- Image View -->
             <div v-else-if="fileCategory === 'image'" class="image-preview-wrapper">
               <img
-                :src="previewInfo?.thumbnail_link || previewUrl"
+                v-if="imagePreviewSrc && !imageLoadError"
+                :src="imagePreviewSrc"
                 :alt="file?.name"
                 class="preview-image-full"
+                @error="imageLoadError = true"
               />
+              <div v-else class="preview-fallback-box">
+                <p>No se pudo cargar la imagen previa.</p>
+                <a :href="directDownloadUrl" target="_blank" class="btn-download-direct">
+                  Abrir en Google Drive
+                </a>
+              </div>
             </div>
 
             <!-- Video Player (HTML5 / Drive Embed) -->

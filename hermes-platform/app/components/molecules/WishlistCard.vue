@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { WishlistItem } from '~/composables/useLists'
+import { useDriveBucket } from '~/composables/useDriveBucket'
 import WishlistPriceTag from '~/components/atoms/WishlistPriceTag.vue'
 import WishlistPriorityBadge from '~/components/atoms/WishlistPriorityBadge.vue'
 
@@ -15,11 +16,23 @@ const emit = defineEmits<{
   (e: 'delete', item: WishlistItem): void
 }>()
 
+const { getDriveFileContentUrl } = useDriveBucket()
+const imageLoadError = ref(false)
+
 const primaryImage = computed(() => {
   if (props.item.images && props.item.images.length > 0) {
     return props.item.images[0]
   }
   return null
+})
+
+const primaryImageUrl = computed(() => {
+  if (imageLoadError.value || !primaryImage.value) return ''
+  const driveId = primaryImage.value.drive_file_id
+  if (driveId) {
+    return getDriveFileContentUrl(driveId) || primaryImage.value.thumbnail_link || primaryImage.value.web_view_link || ''
+  }
+  return primaryImage.value.thumbnail_link || primaryImage.value.web_view_link || ''
 })
 
 const isPurchased = computed(() => props.item.status === 'PURCHASED')
@@ -29,12 +42,13 @@ const isPurchased = computed(() => props.item.status === 'PURCHASED')
   <div class="wishlist-card glass-panel" :class="{ 'is-purchased': isPurchased }">
     <!-- Media / Image Box -->
     <div class="card-media-wrapper">
-      <template v-if="primaryImage">
+      <template v-if="primaryImage && primaryImageUrl && !imageLoadError">
         <img
-          :src="primaryImage.thumbnail_link || primaryImage.web_view_link"
+          :src="primaryImageUrl"
           :alt="item.name"
           class="item-photo"
           loading="lazy"
+          @error="imageLoadError = true"
         />
         <span v-if="item.images.length > 1" class="photos-count-tag">
           📷 {{ item.images.length }}

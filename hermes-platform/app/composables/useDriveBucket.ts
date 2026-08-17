@@ -16,6 +16,7 @@ export interface DriveBucket {
   root_name: string
   multimedia_id: string
   archivos_id: string
+  whitelist_id?: string
   folders: DriveFile[]
 }
 
@@ -251,6 +252,27 @@ export const useDriveBucket = () => {
     }
   }
 
+  const extractDriveId = (input?: string): string => {
+    if (!input) return ''
+    if (!input.includes('/') && !input.includes('?')) return input
+    const idParamMatch = input.match(/[?&]id=([a-zA-Z0-9_-]+)/)
+    if (idParamMatch && idParamMatch[1]) return idParamMatch[1]
+    const dPathMatch = input.match(/\/d\/([a-zA-Z0-9_-]+)/)
+    if (dPathMatch && dPathMatch[1]) return dPathMatch[1]
+    const filesPathMatch = input.match(/\/files\/([a-zA-Z0-9_-]+)/)
+    if (filesPathMatch && filesPathMatch[1]) return filesPathMatch[1]
+    return input
+  }
+
+  const getDriveFileContentUrl = (fileIdOrUrl?: string): string => {
+    if (!fileIdOrUrl) return ''
+    const resolvedId = extractDriveId(fileIdOrUrl)
+    if (!resolvedId) return ''
+    const apiBaseUrl = config.public.apiBaseUrl
+    const tokenParam = sessionToken.value ? `?token=${encodeURIComponent(sessionToken.value)}` : ''
+    return `${apiBaseUrl}/api/v1/services/drive/files/${resolvedId}/content${tokenParam}`
+  }
+
   return {
     bucket,
     currentFolderId,
@@ -280,6 +302,7 @@ export const useDriveBucket = () => {
     closePreview,
     promptDeleteFile,
     cancelDelete,
-    executeDeleteFile
+    executeDeleteFile,
+    getDriveFileContentUrl
   }
 }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DriveFile } from '~/composables/useDriveBucket'
+import { useDriveBucket } from '~/composables/useDriveBucket'
 import FileTypeIcon from '~/components/atoms/FileTypeIcon.vue'
 
 const props = withDefaults(
@@ -17,6 +18,9 @@ const emit = defineEmits<{
   (e: 'delete'): void
 }>()
 
+const { getDriveFileContentUrl } = useDriveBucket()
+const imageLoadError = ref(false)
+
 const formattedSize = computed(() => {
   if (!props.file.size || props.file.is_folder) return ''
   const bytes = parseInt(props.file.size)
@@ -29,6 +33,11 @@ const formattedSize = computed(() => {
 const isImage = computed(() => {
   return props.file.mime_type?.startsWith('image/')
 })
+
+const imageSrc = computed(() => {
+  if (imageLoadError.value || !isImage.value) return ''
+  return getDriveFileContentUrl(props.file.id) || props.file.thumbnail_url || ''
+})
 </script>
 
 <template>
@@ -40,11 +49,12 @@ const isImage = computed(() => {
     <!-- Grid Thumbnail/Icon View -->
     <div v-if="viewMode === 'grid'" class="file-preview-area">
       <img
-        v-if="isImage && file.thumbnail_url"
-        :src="file.thumbnail_url"
+        v-if="isImage && imageSrc && !imageLoadError"
+        :src="imageSrc"
         :alt="file.name"
         class="image-thumb"
         loading="lazy"
+        @error="imageLoadError = true"
       />
       <div v-else class="icon-thumb-wrapper">
         <FileTypeIcon :mime-type="file.mime_type" :is-folder="file.is_folder" :size="40" />

@@ -70,11 +70,19 @@ class ListsService:
     # ─────────────────────────────────────────────────────────────
 
     def _doc_to_wishlist_item(self, doc: Dict[str, Any]) -> WishlistItemResponse:
+        import re
         images_raw = doc.get("images", [])
         images = []
         for img in images_raw:
+            drive_id = img.get("drive_file_id") or ""
+            if not drive_id:
+                link = img.get("thumbnail_link") or img.get("web_view_link") or ""
+                m = re.search(r'[?&]id=([a-zA-Z0-9_-]+)', link) or re.search(r'/d/([a-zA-Z0-9_-]+)', link)
+                if m:
+                    drive_id = m.group(1)
+
             images.append(WishlistImageResponse(
-                drive_file_id=img.get("drive_file_id", ""),
+                drive_file_id=drive_id,
                 name=img.get("name", "foto.jpg"),
                 mime_type=img.get("mime_type", "image/jpeg"),
                 size=int(img.get("size", 0)),

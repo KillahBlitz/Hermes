@@ -163,6 +163,15 @@ async def get_current_user_profile(
     )
 
 
+@router.post("/sync", response_model=LoginResponse)
+async def sync_google_credentials(request: GoogleLoginRequest):
+    """
+    Sincroniza y actualiza credenciales de Google OAuth y Firebase en segundo plano
+    sin interrumpir la sesión activa del usuario ni requerir relogueos forzados.
+    """
+    return await login_with_google(request)
+
+
 @router.post("/logout", response_model=LogoutResponse)
 async def logout(payload: Dict[str, Any] = Depends(get_current_user_payload)):
     """

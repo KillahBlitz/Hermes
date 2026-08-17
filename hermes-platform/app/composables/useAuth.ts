@@ -1,4 +1,4 @@
-import { signInWithPopup, signOut, GoogleAuthProvider, type UserCredential } from 'firebase/auth'
+import { signInWithPopup, signOut, GoogleAuthProvider, onAuthStateChanged, type UserCredential } from 'firebase/auth'
 
 export interface UserProfile {
   uid: string
@@ -17,19 +17,48 @@ export interface LoginResponseData {
   expires_in: number
 }
 
+const LOCAL_STORAGE_USER_KEY = 'hermes_cached_user'
+
 export const useAuth = () => {
   const nuxtApp = useNuxtApp()
   const config = useRuntimeConfig()
   const router = useRouter()
 
-  const user = useState<UserProfile | null>('auth_user', () => null)
+  const user = useState<UserProfile | null>('auth_user', () => {
+    if (import.meta.client) {
+      try {
+        const cached = localStorage.getItem(LOCAL_STORAGE_USER_KEY)
+        return cached ? JSON.parse(cached) : null
+      } catch {
+        return null
+      }
+    }
+    return null
+  })
+
+  // Cookie persistente por 1 año (31,536,000 segundos) para que la sesión se mantenga indefinidamente
   const sessionToken = useCookie<string | null>('hermes_session_token', {
-    maxAge: 86400, // 1 day
+    maxAge: 31536000,
     sameSite: 'lax',
     path: '/'
   })
   const isLoading = useState<boolean>('auth_loading', () => false)
   const error = useState<string | null>('auth_error', () => null)
+
+  const saveLocalUser = (userProfile: UserProfile | null) => {
+    user.value = userProfile
+    if (import.meta.client) {
+      try {
+        if (userProfile) {
+          localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(userProfile))
+        } else {
+          localStorage.removeItem(LOCAL_STORAGE_USER_KEY)
+        }
+      } catch (e) {
+        console.warn('No se pudo guardar usuario en localStorage:', e)
+      }
+    }
+  }
 
   const loginWithGoogle = async () => {
     isLoading.value = true
@@ -73,9 +102,9 @@ export const useAuth = () => {
         }
       })
 
-      // 3. Guardar sesión y perfil
+      // 3. Guardar sesión y perfil persistentemente
       sessionToken.value = response.session_token
-      user.value = response.user
+      saveLocalUser(response.user)
 
       // 4. Redireccionar al dashboard
       await router.push('/')
@@ -105,7 +134,7 @@ export const useAuth = () => {
 
   const fetchCurrentUser = async () => {
     if (!sessionToken.value) {
-      user.value = null
+      saveLocalUser(null)
       return
     }
 
@@ -116,11 +145,39 @@ export const useAuth = () => {
           Authorization: `Bearer ${sessionToken.value}`
         }
       })
-      user.value = res.user
-    } catch (err) {
-      console.warn('No se pudo recuperar la sesión del usuario:', err)
-      sessionToken.value = null
-      user.value = null
+      saveLocalUser(res.user)
+    } catch (err: any) {
+      console.warn('No se pudo recuperar la sesión del usuario desde API:', err)
+      // Si el error es 401 estricto (JWT inválido/expirado), intentamos re-sincronizar con Firebase antes de invalidar
+      if (err?.status === 401 && import.meta.client && nuxtApp.$firebaseAuth?.currentUser) {
+        try {
+          const freshIdToken = await nuxtApp.$firebaseAuth.currentUser.getIdToken(true)
+          const apiBaseUrl = config.public.apiBaseUrl
+          const syncRes = await $fetch<LoginResponseData>(`${apiBaseUrl}/api/v1/auth/sync`, {
+            method: 'POST',
+            body: {
+              id_token: freshIdToken,
+              google_access_token: '',
+              scopes: [
+                'https://www.googleapis.com/auth/drive',
+                'https://www.googleapis.com/auth/calendar',
+                'https://www.googleapis.com/auth/gmail.modify'
+              ]
+            }
+          })
+          sessionToken.value = syncRes.session_token
+          saveLocalUser(syncRes.user)
+          return
+        } catch (syncErr) {
+          console.error('Error en autosincronización de sesión:', syncErr)
+        }
+      }
+      
+      // Si falló completamente y no hay token válido
+      if (err?.status === 401) {
+        sessionToken.value = null
+        saveLocalUser(null)
+      }
     }
   }
 
@@ -142,7 +199,7 @@ export const useAuth = () => {
       }
 
       sessionToken.value = null
-      user.value = null
+      saveLocalUser(null)
       await router.push('/login')
     } catch (err: any) {
       console.error('Error al cerrar sesión:', err)

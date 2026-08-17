@@ -1,6 +1,6 @@
 import logging
 from typing import Any, Dict, Optional
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from src.database.mongo import get_credentials_collection
 from src.models.request.services import (
     CalendarEventCreateRequest,
@@ -29,7 +29,7 @@ from src.services.calendar_service import CalendarService
 from src.services.drive_service import DriveService
 from src.services.gmail_service import GmailService
 from src.utils.crypto import decrypt_token
-from src.utils.jwt import get_current_user_payload
+from src.utils.jwt import get_current_user_from_query_or_header, get_current_user_payload
 
 import json
 from googleapiclient.errors import HttpError
@@ -355,6 +355,32 @@ async def get_file_preview(
         drive = DriveService(access_token)
         info = drive.get_preview_info(file_id)
         return DrivePreviewResponse(**info)
+    except Exception as e:
+        _handle_google_error(e, "Google Drive")
+
+
+@router.get("/drive/files/{file_id}/content")
+async def get_drive_file_content(
+    file_id: str,
+    payload: Dict[str, Any] = Depends(get_current_user_from_query_or_header),
+):
+    """
+    Descarga y sirve directamente el flujo binario del archivo/imagen de Google Drive
+    usando las credenciales autorizadas del usuario, permitiendo el renderizado confiable
+    en etiquetas <img> sin problemas de cookies de terceros o bloqueos CORS.
+    """
+    user_id = payload.get("sub")
+    access_token = await _get_user_access_token(user_id)
+
+    try:
+        drive = DriveService(access_token)
+        content_bytes, mime_type, filename = drive.get_file_content(file_id)
+
+        headers = {
+            "Content-Disposition": f'inline; filename="{filename}"',
+            "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
+        }
+        return Response(content=content_bytes, media_type=mime_type, headers=headers)
     except Exception as e:
         _handle_google_error(e, "Google Drive")
 

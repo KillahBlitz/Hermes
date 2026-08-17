@@ -2,13 +2,13 @@ import logging
 import io
 from typing import Any, Dict, List, Optional
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
+from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 from src.utils.google_credentials import build_google_credentials
 
 logger = logging.getLogger("hermes-api.drive")
 
 HERMES_ROOT_FOLDER = "hermes"
-DEFAULT_SUBFOLDERS = ["multimedia", "archivos"]
+DEFAULT_SUBFOLDERS = ["multimedia", "archivos", "whitelist"]
 FOLDER_MIME = "application/vnd.google-apps.folder"
 
 
@@ -24,11 +24,12 @@ class DriveService:
     def ensure_hermes_bucket(self) -> Dict[str, Any]:
         """
         Verify / create the hermes root folder and default subfolders in the user's Drive.
-        Returns IDs for root, multimedia, and archivos folders.
+        Returns IDs for root, multimedia, archivos, and whitelist folders.
         """
         root_id = self._find_or_create_folder(HERMES_ROOT_FOLDER, parent_id="root")
         multimedia_id = self._find_or_create_folder("multimedia", parent_id=root_id)
         archivos_id = self._find_or_create_folder("archivos", parent_id=root_id)
+        whitelist_id = self._find_or_create_folder("whitelist", parent_id=root_id)
 
         # List all direct children folders of hermes root
         folders = self._list_items(root_id, folders_only=True)
@@ -38,6 +39,7 @@ class DriveService:
             "root_name": HERMES_ROOT_FOLDER,
             "multimedia_id": multimedia_id,
             "archivos_id": archivos_id,
+            "whitelist_id": whitelist_id,
             "folders": folders,
         }
 
@@ -105,6 +107,17 @@ class DriveService:
                 fields="id,name,mimeType,size,webViewLink,thumbnailLink",
             ).execute()
             logger.info(f"Uploaded file '{filename}' (ID: {uploaded['id']}) to folder {folder_id}")
+
+            # Set public link read permission so standard Google preview links also function
+            try:
+                self.service.permissions().create(
+                    fileId=uploaded["id"],
+                    body={"role": "reader", "type": "anyone"},
+                    fields="id"
+                ).execute()
+            except Exception as perm_err:
+                logger.debug(f"Could not set public permission on {uploaded['id']}: {perm_err}")
+
             return {
                 "id": uploaded["id"],
                 "name": uploaded["name"],
@@ -116,6 +129,33 @@ class DriveService:
             }
         except Exception as e:
             logger.error(f"Error uploading file '{filename}': {e}")
+            raise
+
+    # ── Download File Content ──
+
+    def get_file_content(self, file_id: str) -> tuple[bytes, str, str]:
+        """
+        Download binary content of a file from Google Drive.
+        Returns (content_bytes, mime_type, filename).
+        """
+        try:
+            meta = self.service.files().get(
+                fileId=file_id,
+                fields="id,name,mimeType,size"
+            ).execute()
+            mime_type = meta.get("mimeType", "application/octet-stream")
+            filename = meta.get("name", "file")
+
+            request = self.service.files().get_media(fileId=file_id)
+            fh = io.BytesIO()
+            downloader = MediaIoBaseDownload(fh, request)
+            done = False
+            while not done:
+                status, done = downloader.next_chunk()
+
+            return fh.getvalue(), mime_type, filename
+        except Exception as e:
+            logger.error(f"Error downloading file {file_id} from Drive: {e}")
             raise
 
     # ── Trash File ──

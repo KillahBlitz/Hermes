@@ -20,10 +20,10 @@ class Settings(BaseSettings):
     # Cryptography (Fernet symmetric key)
     ENCRYPTION_KEY: str = ""
 
-    # JWT Session configuration (1 day default)
+    # JWT Session configuration (1 year default for persistent session)
     JWT_SECRET_KEY: str = "hermes_default_secret_key_change_in_production"
     JWT_ALGORITHM: str = "HS256"
-    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 525600
 
     model_config = SettingsConfigDict(
         env_file=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env"),

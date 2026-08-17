@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { WishlistItem } from '~/composables/useLists'
+import { useDriveBucket } from '~/composables/useDriveBucket'
 
 const props = defineProps<{
   show: boolean
@@ -13,9 +14,17 @@ const emit = defineEmits<{
   (e: 'upload', file: File): void
 }>()
 
+const { getDriveFileContentUrl } = useDriveBucket()
 const isDragging = ref(false)
 const selectedFile = ref<File | null>(null)
 const previewUrl = ref<string | null>(null)
+
+const getImgSrc = (img: { drive_file_id?: string; thumbnail_link?: string; web_view_link?: string }) => {
+  if (img.drive_file_id) {
+    return getDriveFileContentUrl(img.drive_file_id) || img.thumbnail_link || img.web_view_link || ''
+  }
+  return img.thumbnail_link || img.web_view_link || ''
+}
 
 const onFileSelected = (e: Event) => {
   const input = e.target as HTMLInputElement
@@ -75,7 +84,7 @@ const handleUpload = () => {
             class="drive-photo-card"
             title="Ver en Google Drive"
           >
-            <img :src="img.thumbnail_link || img.web_view_link" :alt="img.name" class="drive-thumb" />
+            <img :src="getImgSrc(img)" :alt="img.name" class="drive-thumb" />
             <span class="photo-name">{{ img.name }}</span>
           </a>
         </div>
