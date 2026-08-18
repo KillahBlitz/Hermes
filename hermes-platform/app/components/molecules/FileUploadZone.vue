@@ -3,10 +3,12 @@ const props = withDefaults(
   defineProps<{
     uploading?: boolean
     progress?: number
+    destinationLabel?: string
   }>(),
   {
     uploading: false,
-    progress: 0
+    progress: 0,
+    destinationLabel: 'Google Drive'
   }
 )
 
@@ -68,7 +70,7 @@ const handleFileChange = (e: Event) => {
     <!-- Upload in progress state -->
     <div v-if="uploading" class="upload-progress-state">
       <div class="spinner-neon" />
-      <span class="upload-title">Subiendo archivo a Google Drive...</span>
+      <span class="upload-title">Subiendo archivo a {{ destinationLabel }}...</span>
       <div class="progress-bar-container">
         <div class="progress-bar-fill" :style="{ width: `${progress}%` }" />
       </div>

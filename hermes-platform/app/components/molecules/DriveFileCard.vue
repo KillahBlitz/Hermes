@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DriveFile } from '~/composables/useDriveBucket'
+import type { DriveFile, StorageSource } from '~/composables/useDriveBucket'
 import { useDriveBucket } from '~/composables/useDriveBucket'
 import FileTypeIcon from '~/components/atoms/FileTypeIcon.vue'
 
@@ -7,9 +7,11 @@ const props = withDefaults(
   defineProps<{
     file: DriveFile
     viewMode?: 'grid' | 'list'
+    source?: StorageSource
   }>(),
   {
-    viewMode: 'grid'
+    viewMode: 'grid',
+    source: 'drive'
   }
 )
 
@@ -18,7 +20,7 @@ const emit = defineEmits<{
   (e: 'delete'): void
 }>()
 
-const { getDriveFileContentUrl } = useDriveBucket()
+const { getFileContentUrl } = useDriveBucket()
 const imageLoadError = ref(false)
 
 const formattedSize = computed(() => {
@@ -36,7 +38,7 @@ const isImage = computed(() => {
 
 const imageSrc = computed(() => {
   if (imageLoadError.value || !isImage.value) return ''
-  return getDriveFileContentUrl(props.file.id) || props.file.thumbnail_url || ''
+  return getFileContentUrl(props.file.id, props.source) || props.file.thumbnail_url || ''
 })
 </script>
 

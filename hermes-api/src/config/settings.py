@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     # Cryptography (Fernet symmetric key)
     ENCRYPTION_KEY: str = ""
 
+    # Local storage bucket (multimedia alojada en el servidor del servicio)
+    LOCAL_STORAGE_PATH: str = "storage"
+    LOCAL_STORAGE_MAX_UPLOAD_MB: int = 200
+
     # JWT Session configuration (1 year default for persistent session)
     JWT_SECRET_KEY: str = "hermes_default_secret_key_change_in_production"
     JWT_ALGORITHM: str = "HS256"

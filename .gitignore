@@ -2,6 +2,8 @@ skills/
 serviceAccountKey.json
 __init__.py
 
+hermes-api/storage/
+
 logs
 *.log
 npm-debug.log*

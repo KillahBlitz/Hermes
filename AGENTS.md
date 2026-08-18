@@ -109,6 +109,8 @@ hermes-api/
 * `FIREBASE_CREDENTIALS_PATH`: Ruta al archivo `serviceAccountKey.json`.
 * `ENCRYPTION_KEY`: Llave Fernet para cifrar tokens en MongoDB.
 * `JWT_SECRET_KEY`, `JWT_ALGORITHM`, `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`: Configuración de sesiones JWT.
+* `LOCAL_STORAGE_PATH`: Ruta del bucket multimedia alojado en el servidor (default `storage`, relativa a `hermes-api/`; en Docker se monta el volumen `hermes-storage` en `/app/storage`).
+* `LOCAL_STORAGE_MAX_UPLOAD_MB`: Tamaño máximo por archivo en el almacenamiento local (default `200`).
 
 ---
 
@@ -134,12 +136,15 @@ hermes-api/
 * **Backend (`hermes-api`)**:
   - `src/services/gmail_service.py`: Consulta de correos destacados (`is:starred`) e importantes (`is:important`), lectura y papelera.
   - `src/services/drive_service.py`: Creación/verificación del bucket `hermes` con carpetas `multimedia`, `archivos` y `whitelist`, streaming de binarios con `MediaIoBaseDownload`, navegación, subida multipart y vistas previas.
+  - `src/services/local_storage_service.py`: Bucket espejo alojado en el disco del servidor (`LOCAL_STORAGE_PATH/<user_id>/`), con la misma interfaz pública que `DriveService`, IDs en Base64 urlsafe de la ruta relativa, papelera `.trash/`, sanitización de nombres, límite de tamaño y bloqueo de *path traversal*.
   - `src/services/calendar_service.py`: Integración con Google Calendar API v3 (listado mensual/semanal, creación de eventos, actualización, eliminación y quickAdd por lenguaje natural).
   - `src/services/audit_service.py`: Registro inmutable en `service_audit_logs` (MongoDB).
   - `src/app/endpoints/services.py`: 17 endpoints bajo `/api/v1/services/` (incluyendo `GET /api/v1/services/drive/files/{file_id}/content` para proxy de imágenes seguras).
+  - **Origen de almacenamiento conmutable**: los 7 endpoints `/drive/*` aceptan `?source=drive|server` (default `drive`) y se despachan vía `_get_storage_backend()` a `DriveService` o `LocalStorageService`. La auditoría registra `service = "DRIVE"` o `"SERVER"` según el origen.
 * **Frontend (`hermes-platform`)**:
   - Selector triple de pestañas: **"Correos"**, **"Multimedia"** y **"Calendario"** en `app/pages/services.vue`.
-  - Composables: `useGmailService.ts`, `useDriveBucket.ts` (con `getDriveFileContentUrl`) y `useCalendarService.ts`.
+  - Composables: `useGmailService.ts`, `useDriveBucket.ts` (con `storageSource`, `setStorageSource`, `getFileContentUrl(id, source)` y el atajo `getDriveFileContentUrl`) y `useCalendarService.ts`.
+  - **Multimedia**: conmutador segmentado *Google Drive ↔ Servidor* en `DriveBucketSection.vue`, preferencia persistida en `localStorage` (`hermes_storage_source`) y propagación de `source` a `DriveFileCard` y `FilePreviewModal` (reproductores HTML5 nativos cuando el origen es el servidor). La Lista de Deseos sigue usando Drive siempre.
   - Componentes: `EmailListSection`, `DriveBucketSection`, `CalendarSection`, `CalendarEventCard`, `CalendarEventModal`, `EmailCard`, `DriveFileCard`, `DriveBreadcrumb`, `FileUploadZone`, `EmailDetailModal`, `DeleteConfirmModal`, `FilePreviewModal`.
 
 ---
@@ -156,7 +161,7 @@ hermes-api/
 * **Dockerización & Puertos Host**:
   - `hermes-api/Dockerfile`: Base `python:3.11-slim` expuesta al host en **puerto 9003** (`9003:8000`).
   - `hermes-platform/Dockerfile`: Multi-stage `node:22-alpine` (SSR a `.output`) expuesta al host en **puerto 3003** (`3003:3000`).
-  - `docker-compose.yml`: Orquestación de servicios en red `hermes-network` con límites de memoria de 512MB adaptados a servidores pequeños.
+  - `docker-compose.yml`: Orquestación de servicios en red `hermes-network` con límites de memoria de 512MB adaptados a servidores pequeños y volumen `hermes-storage` montado en `/app/storage` para persistir el bucket multimedia local entre despliegues.
 
 ---
 

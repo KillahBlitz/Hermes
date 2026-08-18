@@ -28,7 +28,7 @@ const activeTab = ref<'emails' | 'media' | 'calendar'>('emails')
           Administrador de Servicios
         </h1>
         <p class="page-subtitle">
-          Interacción directa con los servicios en la nube vinculados a tu cuenta: correos de Gmail, almacenamiento en Google Drive y gestión en tiempo real de Google Calendar.
+          Interacción directa con los servicios vinculados a tu cuenta: correos de Gmail, almacenamiento multimedia conmutable entre Google Drive y el servidor de Hermes, y gestión en tiempo real de Google Calendar.
         </p>
       </div>
 

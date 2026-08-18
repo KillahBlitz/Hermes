@@ -35,9 +35,21 @@ export interface PreviewInfo {
   size?: string
 }
 
+/** Origen de almacenamiento del módulo Multimedia: Google Drive o el servidor que hostea Hermes. */
+export type StorageSource = 'drive' | 'server'
+
+export const STORAGE_SOURCE_LABELS: Record<StorageSource, string> = {
+  drive: 'Google Drive',
+  server: 'Servidor Hermes'
+}
+
+const STORAGE_SOURCE_KEY = 'hermes_storage_source'
+
 export const useDriveBucket = () => {
   const config = useRuntimeConfig()
   const { sessionToken } = useAuth()
+
+  const storageSource = useState<StorageSource>('storage_source', () => 'drive')
 
   const bucket = useState<DriveBucket | null>('drive_bucket', () => null)
   const currentFolderId = useState<string>('drive_current_folder_id', () => '')
@@ -69,6 +81,36 @@ export const useDriveBucket = () => {
     Authorization: `Bearer ${sessionToken.value || ''}`
   })
 
+  const sourceLabel = computed(() => STORAGE_SOURCE_LABELS[storageSource.value])
+
+  /** Restaura el origen preferido del usuario desde localStorage (solo cliente). */
+  const restoreStorageSource = () => {
+    if (!import.meta.client) return
+    const saved = localStorage.getItem(STORAGE_SOURCE_KEY)
+    if (saved === 'drive' || saved === 'server') {
+      storageSource.value = saved
+    }
+  }
+
+  /** Conmuta el origen de almacenamiento, limpia el estado y recarga el bucket correspondiente. */
+  const setStorageSource = async (source: StorageSource) => {
+    if (source === storageSource.value) return
+    storageSource.value = source
+    if (import.meta.client) {
+      localStorage.setItem(STORAGE_SOURCE_KEY, source)
+    }
+
+    bucket.value = null
+    files.value = []
+    breadcrumbs.value = []
+    currentFolderId.value = ''
+    currentFolderName.value = 'hermes'
+    error.value = null
+    closePreview()
+
+    await initBucket()
+  }
+
   const initBucket = async () => {
     if (!sessionToken.value) return
     loading.value = true
@@ -77,7 +119,8 @@ export const useDriveBucket = () => {
     try {
       const apiBaseUrl = config.public.apiBaseUrl
       const res = await $fetch<DriveBucket>(`${apiBaseUrl}/api/v1/services/drive/bucket`, {
-        headers: getHeaders()
+        headers: getHeaders(),
+        query: { source: storageSource.value }
       })
       bucket.value = res
       currentFolderId.value = res.root_id
@@ -87,8 +130,8 @@ export const useDriveBucket = () => {
       // Load root files
       await loadFolder(res.root_id, 'hermes', false)
     } catch (err: any) {
-      console.error('Error inicializando bucket de Drive:', err)
-      error.value = err.data?.detail || 'No se pudo inicializar la carpeta Hermes en Google Drive.'
+      console.error('Error inicializando bucket de almacenamiento:', err)
+      error.value = err.data?.detail || `No se pudo inicializar la carpeta Hermes en ${sourceLabel.value}.`
     } finally {
       loading.value = false
     }
@@ -105,8 +148,9 @@ export const useDriveBucket = () => {
         files: DriveFile[]
         current_folder_id: string
         current_folder_name: string
-      }>(`${apiBaseUrl}/api/v1/services/drive/files?folder_id=${folderId}`, {
-        headers: getHeaders()
+      }>(`${apiBaseUrl}/api/v1/services/drive/files`, {
+        headers: getHeaders(),
+        query: { folder_id: folderId, source: storageSource.value }
       })
 
       files.value = res.files
@@ -122,7 +166,7 @@ export const useDriveBucket = () => {
         }
       }
     } catch (err: any) {
-      console.error('Error cargando archivos de Drive:', err)
+      console.error('Error cargando archivos del bucket:', err)
       error.value = err.data?.detail || 'No se pudieron cargar los archivos de la carpeta.'
     } finally {
       loading.value = false
@@ -144,6 +188,7 @@ export const useDriveBucket = () => {
       await $fetch(`${apiBaseUrl}/api/v1/services/drive/folders`, {
         method: 'POST',
         headers: getHeaders(),
+        query: { source: storageSource.value },
         body: {
           name: name.trim(),
           parent_folder_id: currentFolderId.value
@@ -174,13 +219,14 @@ export const useDriveBucket = () => {
       await $fetch(`${apiBaseUrl}/api/v1/services/drive/upload`, {
         method: 'POST',
         headers: getHeaders(),
+        query: { source: storageSource.value },
         body: formData
       })
       uploadProgress.value = 100
       await loadFolder(currentFolderId.value, currentFolderName.value, false)
     } catch (err: any) {
       console.error('Error subiendo archivo:', err)
-      error.value = err.data?.detail || 'Error al subir el archivo a Google Drive.'
+      error.value = err.data?.detail || `Error al subir el archivo a ${sourceLabel.value}.`
     } finally {
       setTimeout(() => {
         isUploading.value = false
@@ -204,7 +250,7 @@ export const useDriveBucket = () => {
       const apiBaseUrl = config.public.apiBaseUrl
       const res = await $fetch<PreviewInfo>(
         `${apiBaseUrl}/api/v1/services/drive/files/${file.id}/preview`,
-        { headers: getHeaders() }
+        { headers: getHeaders(), query: { source: storageSource.value } }
       )
       previewInfo.value = res
     } catch (err: any) {
@@ -239,7 +285,8 @@ export const useDriveBucket = () => {
       const fileId = fileToDelete.value.id
       await $fetch(`${apiBaseUrl}/api/v1/services/drive/files/${fileId}`, {
         method: 'DELETE',
-        headers: getHeaders()
+        headers: getHeaders(),
+        query: { source: storageSource.value }
       })
 
       files.value = files.value.filter(f => f.id !== fileId)
@@ -264,16 +311,29 @@ export const useDriveBucket = () => {
     return input
   }
 
-  const getDriveFileContentUrl = (fileIdOrUrl?: string): string => {
+  /**
+   * URL del proxy autenticado que sirve el binario del archivo.
+   * `source` permite apuntar al bucket de Google Drive o al del servidor Hermes.
+   */
+  const getFileContentUrl = (fileIdOrUrl?: string, source: StorageSource = 'drive'): string => {
     if (!fileIdOrUrl) return ''
-    const resolvedId = extractDriveId(fileIdOrUrl)
+    const resolvedId = source === 'drive' ? extractDriveId(fileIdOrUrl) : fileIdOrUrl
     if (!resolvedId) return ''
     const apiBaseUrl = config.public.apiBaseUrl
-    const tokenParam = sessionToken.value ? `?token=${encodeURIComponent(sessionToken.value)}` : ''
-    return `${apiBaseUrl}/api/v1/services/drive/files/${resolvedId}/content${tokenParam}`
+    const params = new URLSearchParams({ source })
+    if (sessionToken.value) params.set('token', sessionToken.value)
+    return `${apiBaseUrl}/api/v1/services/drive/files/${resolvedId}/content?${params.toString()}`
   }
 
+  /** Atajo histórico para los módulos que siempre almacenan en Google Drive (ej. Lista de Deseos). */
+  const getDriveFileContentUrl = (fileIdOrUrl?: string): string =>
+    getFileContentUrl(fileIdOrUrl, 'drive')
+
   return {
+    storageSource,
+    sourceLabel,
+    restoreStorageSource,
+    setStorageSource,
     bucket,
     currentFolderId,
     currentFolderName,
@@ -303,6 +363,7 @@ export const useDriveBucket = () => {
     promptDeleteFile,
     cancelDelete,
     executeDeleteFile,
+    getFileContentUrl,
     getDriveFileContentUrl
   }
 }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { StorageSource } from '~/composables/useDriveBucket'
 import { useDriveBucket } from '~/composables/useDriveBucket'
 import DriveBreadcrumb from '~/components/molecules/DriveBreadcrumb.vue'
 import DriveFileCard from '~/components/molecules/DriveFileCard.vue'
@@ -8,6 +9,10 @@ import DeleteConfirmModal from '~/components/organisms/DeleteConfirmModal.vue'
 
 const { logout } = useAuth()
 const {
+  storageSource,
+  sourceLabel,
+  restoreStorageSource,
+  setStorageSource,
   bucket,
   currentFolderId,
   currentFolderName,
@@ -42,6 +47,8 @@ const {
 const showUploadZone = ref(true)
 const newFolderNameInput = ref('')
 
+const isDriveSource = computed(() => storageSource.value === 'drive')
+
 const handleCreateFolder = async () => {
   if (!newFolderNameInput.value.trim()) return
   await createFolder(newFolderNameInput.value)
@@ -52,7 +59,15 @@ const handleFileUploaded = async (file: File) => {
   await uploadFile(file)
 }
 
+const handleSourceChange = async (source: StorageSource) => {
+  if (loading.value || isUploading.value) return
+  isCreateFolderOpen.value = false
+  newFolderNameInput.value = ''
+  await setStorageSource(source)
+}
+
 onMounted(() => {
+  restoreStorageSource()
   if (!bucket.value) {
     initBucket()
   }
@@ -61,6 +76,52 @@ onMounted(() => {
 
 <template>
   <section class="drive-section">
+    <!-- Storage Source Switch: Google Drive ↔ Servidor Hermes -->
+    <div class="storage-source-bar glass-panel">
+      <div class="source-switch-group">
+        <button
+          class="btn-source"
+          :class="{ active: isDriveSource }"
+          :disabled="loading || isUploading"
+          title="Almacenar y consultar los archivos en tu Google Drive"
+          type="button"
+          @click="handleSourceChange('drive')"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 3 L16 3 L22 14 L14 14 Z" />
+            <path d="M2 14 L8 3 L12 10 L6 21 Z" />
+            <path d="M6 21 L22 14" />
+          </svg>
+          Google Drive
+        </button>
+        <button
+          class="btn-source"
+          :class="{ active: !isDriveSource }"
+          :disabled="loading || isUploading"
+          title="Almacenar y consultar los archivos en el servidor que hostea Hermes"
+          type="button"
+          @click="handleSourceChange('server')"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="7" rx="2" />
+            <rect x="2" y="14" width="20" height="7" rx="2" />
+            <line x1="6" y1="6.5" x2="6.01" y2="6.5" />
+            <line x1="6" y1="17.5" x2="6.01" y2="17.5" />
+          </svg>
+          Servidor
+        </button>
+      </div>
+
+      <p class="source-hint">
+        <template v-if="isDriveSource">
+          Bucket <strong>hermes</strong> sincronizado en tu Google Drive personal.
+        </template>
+        <template v-else>
+          Bucket <strong>hermes</strong> alojado en el disco del servidor de Hermes (privado por usuario).
+        </template>
+      </p>
+    </div>
+
     <!-- Toolbar: Breadcrumbs + Actions -->
     <div class="drive-toolbar glass-panel">
       <!-- Breadcrumbs Path -->
@@ -176,6 +237,7 @@ onMounted(() => {
         <FileUploadZone
           :uploading="isUploading"
           :progress="uploadProgress"
+          :destination-label="sourceLabel"
           @file-selected="handleFileUploaded"
         />
       </div>
@@ -191,13 +253,18 @@ onMounted(() => {
         </svg>
       </div>
       <div class="error-body">
-        <strong class="error-title">No se pudieron sincronizar los archivos de Google Drive</strong>
+        <strong class="error-title">No se pudieron sincronizar los archivos de {{ sourceLabel }}</strong>
         <p class="error-desc">{{ error }}</p>
         <div class="error-actions">
           <button class="btn-error-action" type="button" @click="initBucket">
             🔄 Reintentar
           </button>
-          <button class="btn-error-action btn-error-logout" type="button" @click="logout">
+          <button
+            v-if="isDriveSource"
+            class="btn-error-action btn-error-logout"
+            type="button"
+            @click="logout"
+          >
             🔑 Volver a iniciar sesión
           </button>
         </div>
@@ -218,7 +285,7 @@ onMounted(() => {
       </div>
       <h3 class="empty-title">Esta carpeta está vacía</h3>
       <p class="empty-desc">
-        Arrastra archivos a la zona de subida superior para almacenarlos en tu Google Drive.
+        Arrastra archivos a la zona de subida superior para almacenarlos en {{ sourceLabel }}.
       </p>
     </div>
 
@@ -233,6 +300,7 @@ onMounted(() => {
         :key="file.id"
         :file="file"
         :view-mode="viewMode"
+        :source="storageSource"
         @click="openPreview(file)"
         @delete="promptDeleteFile(file)"
       />
@@ -244,14 +312,15 @@ onMounted(() => {
       :file="fileToPreview"
       :preview-info="previewInfo"
       :loading="previewLoading"
+      :source="storageSource"
       @close="closePreview"
     />
 
     <!-- Delete Confirmation Modal -->
     <DeleteConfirmModal
       :is-open="isDeleteModalOpen"
-      title="Eliminar de Google Drive"
-      message="¿Estás seguro de que deseas enviar este archivo a la papelera de Google Drive? Esta acción se registrará en la bitácora de auditoría."
+      :title="`Eliminar de ${sourceLabel}`"
+      :message="`¿Estás seguro de que deseas enviar este archivo a la papelera de ${sourceLabel}? Esta acción se registrará en la bitácora de auditoría.`"
       :item-title="fileToDelete?.name"
       :is-deleting="isDeleting"
       @confirm="executeDeleteFile"
@@ -265,6 +334,69 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+
+/* ── Storage Source Switch (Drive ↔ Servidor) ── */
+.storage-source-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  flex-wrap: wrap;
+}
+
+.source-switch-group {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.btn-source {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--hermes-text-muted);
+  font-family: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-source:hover:not(:disabled):not(.active) {
+  color: var(--hermes-text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.btn-source.active {
+  color: var(--hermes-text-primary);
+  background: linear-gradient(135deg, rgba(0, 229, 255, 0.18), rgba(255, 0, 127, 0.18));
+  border-color: rgba(0, 229, 255, 0.35);
+  box-shadow: 0 0 16px rgba(0, 229, 255, 0.18);
+}
+
+.btn-source:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.source-hint {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--hermes-text-muted);
+}
+
+.source-hint strong {
+  color: var(--hermes-accent-teal);
+  font-weight: 700;
 }
 
 .drive-toolbar {

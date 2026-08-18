@@ -183,6 +183,34 @@ Al hacer clic en un archivo, se abre el visor multimedia de acuerdo a su tipo MI
 | **Documentos** | `.pdf` | Visor de PDF integrado con scroll vertical y paginación. |
 | **Ofimática / Otros** | `.docx`, `.xlsx`, `.pptx`, `.txt`, `.zip` | Iframe de vista previa de Google Drive (`preview link`) o visor de texto plano con botón de descarga directa. |
 
+### 4.5. Conmutador de Origen de Almacenamiento (Google Drive ↔ Servidor Hermes) - IMPLEMENTADO
+
+El submódulo Multimedia puede operar sobre **dos backends de almacenamiento intercambiables** mediante un
+selector segmentado ubicado sobre la barra de navegación del explorador:
+
+| Origen (`source`) | Ubicación física | Uso recomendado |
+|---|---|---|
+| `drive` (por defecto) | Google Drive del usuario, carpeta raíz `hermes` | Archivos que se desean sincronizar con la nube personal y compartir desde Google. |
+| `server` | Disco del servidor que hostea Hermes, bucket privado por usuario | Archivos que no deben salir de la infraestructura propia o cuando la cuota de Drive es limitada. |
+
+* **Bucket local del servidor**: `<LOCAL_STORAGE_PATH>/<user_id>/` actúa como la raíz `hermes`, aprovisionando
+  automáticamente las mismas subcarpetas por defecto (`multimedia`, `archivos`, `whitelist`).
+* **IDs opacos**: para mantener idéntico el contrato de la API, los identificadores del origen `server` son la
+  ruta relativa del archivo codificada en **Base64 urlsafe** (ej. `multimedia/foto.png` → `bXVsdGltZWRpYS9mb3RvLnBuZw`).
+* **Aislamiento y seguridad**:
+  - Cada usuario solo puede leer/escribir dentro de su propio directorio; toda ruta se resuelve y valida contra
+    la raíz del bucket, bloqueando *path traversal* (`../`) con `403`.
+  - Los nombres de archivos y carpetas se sanitizan (caracteres reservados, rutas y nombres vacíos).
+  - Límite de tamaño por archivo configurable (`LOCAL_STORAGE_MAX_UPLOAD_MB`, 200 MB por defecto → `413`).
+* **Papelera**: la eliminación en el servidor mueve el archivo a la carpeta oculta `.trash/` del bucket del usuario
+  (equivalente a `trashed=true` de Drive) y queda registrada en auditoría con `service = "SERVER"`.
+* **Previsualización**: al no existir enlaces externos de Google, las vistas previas del origen `server` se sirven
+  siempre por el proxy autenticado `GET /api/v1/services/drive/files/{file_id}/content?source=server`, usando
+  reproductores HTML5 nativos para video y audio, e `iframe` directo para PDF.
+* **Persistencia de la preferencia**: el origen activo se guarda en `localStorage` (`hermes_storage_source`), por lo
+  que el usuario regresa siempre al bucket que estaba usando.
+* **Independencia de módulos**: la Lista de Deseos (`hermes/whitelist`) continúa almacenando sus fotos en Google Drive.
+
 ---
 
 ## 5. Diseño Visual y Micro-Animaciones (UI/UX)
@@ -209,13 +237,17 @@ Al hacer clic en un archivo, se abre el visor multimedia de acuerdo a su tipo MI
 * `GET /api/v1/services/emails/{message_id}`: Obtiene el cuerpo completo formateado, cabeceras y lista de adjuntos de un correo.
 * `DELETE /api/v1/services/emails/{message_id}`: Mueve el correo a la papelera en Gmail y registra el movimiento en `service_audit_logs`.
 
-#### Módulo Multimedia (Google Drive)
-* `GET /api/v1/services/drive/bucket`: Verifica y aprovisiona la carpeta `hermes` y sus subcarpetas (`multimedia`, `archivos`). Retorna la estructura de carpetas.
+#### Módulo Multimedia (Google Drive ↔ Servidor Hermes)
+Todos los endpoints aceptan el query param `source=drive|server` (por defecto `drive`) que determina el backend
+de almacenamiento sobre el que operan. El contrato de request/response es idéntico para ambos orígenes.
+
+* `GET /api/v1/services/drive/bucket`: Verifica y aprovisiona la carpeta `hermes` y sus subcarpetas (`multimedia`, `archivos`, `whitelist`). Retorna la estructura de carpetas.
 * `GET /api/v1/services/drive/files`: Lista archivos y subcarpetas dentro de un `folder_id` específico.
 * `POST /api/v1/services/drive/folders`: Crea una nueva subcarpeta dentro de una carpeta existente.
 * `POST /api/v1/services/drive/upload`: Sube uno o varios archivos mediante `multipart/form-data` a una carpeta determinada.
-* `DELETE /api/v1/services/drive/files/{file_id}`: Elimina o envía a la papelera un archivo de Drive y registra el movimiento en auditoría.
-* `GET /api/v1/services/drive/files/{file_id}/preview`: Genera URL segura de previsualización o stream del archivo.
+* `DELETE /api/v1/services/drive/files/{file_id}`: Envía a la papelera un archivo (papelera de Drive o `.trash/` del servidor) y registra el movimiento en auditoría.
+* `GET /api/v1/services/drive/files/{file_id}/preview`: Genera metadatos y URLs de previsualización del archivo.
+* `GET /api/v1/services/drive/files/{file_id}/content`: Proxy autenticado que sirve el flujo binario del archivo (acepta el JWT por header o `?token=`), habilitando `<img>`, `<video>` y `<audio>` sin bloqueos de cookies de terceros.
 
 #### Auditoría
 * `GET /api/v1/services/audit-logs`: Consulta el historial de movimientos de servicios del usuario autenticado con filtros por fecha y servicio.
@@ -229,6 +261,10 @@ Al hacer clic en un archivo, se abre el visor multimedia de acuerdo a su tipo MI
   - Descifra el `google_access_token` del usuario.
   - Instancia el cliente de Google Drive API v3.
   - Métodos: `ensure_hermes_bucket()`, `list_folder_contents()`, `create_folder()`, `upload_file()`, `trash_file()`.
+* **`src/services/local_storage_service.py`**:
+  - Bucket alojado en el disco del servidor (`LOCAL_STORAGE_PATH`), aislado por `user_id`.
+  - Replica la interfaz pública de `DriveService` (`ensure_hermes_bucket()`, `ensure_whitelist_folder()`, `list_folder_contents()`, `create_folder()`, `upload_file()`, `get_file_content()`, `trash_file()`, `get_preview_info()`) para que el endpoint despache al backend elegido sin lógica condicional adicional.
+  - Valida rutas contra *path traversal*, sanitiza nombres, resuelve colisiones (`archivo (1).png`) y lanza `LocalStorageError` con código HTTP sugerido.
 * **`src/services/audit_service.py`**:
   - Persiste asíncronamente los logs en la colección `service_audit_logs` de MongoDB.
 
@@ -259,11 +295,11 @@ hermes-platform/app/
 │   ├── molecules/
 │   │   ├── EmailCard.vue              # Tarjeta de correo en lista
 │   │   ├── DriveBreadcrumb.vue        # Barra de ruta de carpetas
-│   │   ├── DriveFileCard.vue          # Tarjeta de archivo con thumbnail y menú
-│   │   └── FileUploadZone.vue         # Zona de Drag & Drop para subida de archivos
+│   │   ├── DriveFileCard.vue          # Tarjeta de archivo con thumbnail y menú (prop `source`)
+│   │   └── FileUploadZone.vue         # Zona de Drag & Drop para subida de archivos (prop `destinationLabel`)
 │   ├── organisms/
 │   │   ├── EmailListSection.vue       # Vista completa de gestión de correos
-│   │   ├── DriveBucketSection.vue     # Vista completa de gestión de archivos Drive
+│   │   ├── DriveBucketSection.vue     # Explorador de archivos + conmutador Drive/Servidor
 │   │   ├── EmailDetailModal.vue       # Modal de visualización de correo
 │   │   ├── DeleteConfirmModal.vue     # Modal de confirmación para eliminación
 │   │   └── FilePreviewModal.vue       # Visor universal de imágenes, videos y docs
@@ -271,7 +307,7 @@ hermes-platform/app/
 │       └── ServicesTemplate.vue       # Orquestador del layout de Servicios
 ├── composables/
 │   ├── useGmailService.ts             # Lógica reactiva de obtención, lectura y borrado de correos
-│   └── useDriveBucket.ts              # Lógica reactiva de carpetas, uploads y preview
+│   └── useDriveBucket.ts              # Carpetas, uploads, preview y origen activo (`storageSource`)
 └── pages/
     └── services.vue                   # Página principal que consume ServicesTemplate
 ```
@@ -286,3 +322,5 @@ hermes-platform/app/
 4. **Confirmación y Borrado**: No debe ser posible eliminar un correo sin pasar por el modal de confirmación, y la acción debe quedar registrada en MongoDB con timestamp y datos del correo.
 5. **Aprovisionamiento Automático en Drive**: Al ingresar al módulo multimedia, deben existir y ser accesibles la carpeta `"hermes"` y las subcarpetas `"multimedia"` y `"archivos"`.
 6. **Previsualización Multimedia**: Las imágenes deben abrirse en visor con zoom, los videos deben reproducirse directamente con HTML5, y los PDFs/documentos deben poder previsualizarse fluidamente.
+7. **Conmutación de Origen**: Al alternar entre "Google Drive" y "Servidor", el explorador debe reiniciar breadcrumbs y listado, aprovisionar el bucket del origen elegido y reflejar el destino en la zona de subida, el visor y el modal de eliminación. La preferencia debe conservarse al recargar la página.
+8. **Aislamiento del Bucket Local**: Un usuario nunca debe poder listar, leer ni eliminar archivos fuera de su propio directorio en el servidor; cualquier intento de `../` debe responder `403`.

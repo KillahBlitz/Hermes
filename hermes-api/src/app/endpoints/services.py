@@ -28,6 +28,7 @@ from src.services.audit_service import audit_service
 from src.services.calendar_service import CalendarService
 from src.services.drive_service import DriveService
 from src.services.gmail_service import GmailService
+from src.services.local_storage_service import LocalStorageError, LocalStorageService
 from src.utils.crypto import decrypt_token
 from src.utils.jwt import get_current_user_from_query_or_header, get_current_user_payload
 
@@ -119,6 +120,47 @@ async def _get_user_access_token(user_id: str) -> str:
     return token
 
 
+# ── Helper: Storage backend resolution (Google Drive ↔ Servidor local) ──
+
+SourceQuery = Query(
+    "drive",
+    regex="^(drive|server)$",
+    description="Origen de almacenamiento: 'drive' (Google Drive) o 'server' (disco del servidor Hermes)",
+)
+
+
+async def _get_storage_backend(source: str, user_id: str):
+    """
+    Devuelve el backend de almacenamiento activo para el módulo Multimedia.
+    Ambos servicios exponen la misma interfaz (bucket, listado, carpetas, subida,
+    contenido, papelera y previsualización).
+    """
+    if source == "server":
+        return LocalStorageService(user_id)
+    access_token = await _get_user_access_token(user_id)
+    return DriveService(access_token)
+
+
+def _handle_storage_error(e: Exception, source: str):
+    """Traduce errores del backend activo (Drive o servidor local) a HTTPException."""
+    if isinstance(e, LocalStorageError):
+        logger.error(f"Error en almacenamiento del servidor: {e.message}")
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    if source == "server":
+        if isinstance(e, HTTPException):
+            raise e
+        logger.error(f"Error inesperado en almacenamiento del servidor: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error inesperado en el almacenamiento del servidor: {str(e)}",
+        )
+    _handle_google_error(e, "Google Drive")
+
+
+def _storage_audit_service(source: str) -> str:
+    return "SERVER" if source == "server" else "DRIVE"
+
+
 # ═══════════════════════════════════════════════════════════════
 #  GMAIL ENDPOINTS
 # ═══════════════════════════════════════════════════════════════
@@ -207,174 +249,184 @@ async def trash_email(
 
 
 # ═══════════════════════════════════════════════════════════════
-#  GOOGLE DRIVE ENDPOINTS
+#  STORAGE ENDPOINTS (Google Drive ↔ Servidor Hermes)
+#
+#  Todos aceptan `?source=drive|server`. Con `drive` (default) operan
+#  sobre el bucket `hermes` de Google Drive del usuario; con `server`
+#  operan sobre el bucket local del servidor que hostea el servicio.
 # ═══════════════════════════════════════════════════════════════
 
 @router.get("/drive/bucket", response_model=DriveBucketResponse)
 async def get_or_create_bucket(
+    source: str = SourceQuery,
     payload: Dict[str, Any] = Depends(get_current_user_payload),
 ):
-    """Verifica y aprovisiona la carpeta hermes con subcarpetas por defecto en Drive."""
+    """Verifica y aprovisiona la carpeta hermes con subcarpetas por defecto en el origen indicado."""
     user_id = payload.get("sub")
-    access_token = await _get_user_access_token(user_id)
 
     try:
-        drive = DriveService(access_token)
-        bucket = drive.ensure_hermes_bucket()
+        storage = await _get_storage_backend(source, user_id)
+        bucket = storage.ensure_hermes_bucket()
         return DriveBucketResponse(**bucket)
     except Exception as e:
-        _handle_google_error(e, "Google Drive")
+        _handle_storage_error(e, source)
 
 
 @router.get("/drive/files", response_model=DriveFileListResponse)
 async def list_drive_files(
     folder_id: str = Query(..., description="ID de la carpeta a listar"),
+    source: str = SourceQuery,
     payload: Dict[str, Any] = Depends(get_current_user_payload),
 ):
-    """Lista archivos y subcarpetas dentro de una carpeta."""
+    """Lista archivos y subcarpetas dentro de una carpeta del origen indicado."""
     user_id = payload.get("sub")
-    access_token = await _get_user_access_token(user_id)
 
     try:
-        drive = DriveService(access_token)
-        result = drive.list_folder_contents(folder_id)
+        storage = await _get_storage_backend(source, user_id)
+        result = storage.list_folder_contents(folder_id)
         return DriveFileListResponse(**result)
     except Exception as e:
-        _handle_google_error(e, "Google Drive")
+        _handle_storage_error(e, source)
 
 
 @router.post("/drive/folders", response_model=FolderCreatedResponse)
 async def create_drive_folder(
     request: CreateFolderRequest,
+    source: str = SourceQuery,
     payload: Dict[str, Any] = Depends(get_current_user_payload),
 ):
-    """Crea una nueva subcarpeta en Google Drive."""
+    """Crea una nueva subcarpeta en el origen indicado."""
     user_id = payload.get("sub")
     user_email = payload.get("email", "")
-    access_token = await _get_user_access_token(user_id)
 
     try:
-        drive = DriveService(access_token)
-        result = drive.create_folder(request.name, request.parent_folder_id)
+        storage = await _get_storage_backend(source, user_id)
+        result = storage.create_folder(request.name, request.parent_folder_id)
 
         await audit_service.log_action(
             user_id=user_id,
             user_email=user_email,
-            service="DRIVE",
+            service=_storage_audit_service(source),
             action="CREATE_FOLDER",
             resource_id=result["id"],
             resource_title=request.name,
-            details={"parent_folder_id": request.parent_folder_id},
+            details={"parent_folder_id": request.parent_folder_id, "source": source},
         )
 
         return FolderCreatedResponse(**result)
     except Exception as e:
-        _handle_google_error(e, "Google Drive")
+        _handle_storage_error(e, source)
 
 
 @router.post("/drive/upload", response_model=FileUploadResponse)
 async def upload_drive_file(
     file: UploadFile = File(...),
     folder_id: str = Form(...),
+    source: str = SourceQuery,
     payload: Dict[str, Any] = Depends(get_current_user_payload),
 ):
-    """Sube un archivo a una carpeta de Google Drive."""
+    """Sube un archivo a una carpeta del origen indicado."""
     user_id = payload.get("sub")
     user_email = payload.get("email", "")
-    access_token = await _get_user_access_token(user_id)
 
     try:
         content = await file.read()
         mime = file.content_type or "application/octet-stream"
         filename = file.filename or "unnamed_file"
 
-        drive = DriveService(access_token)
-        result = drive.upload_file(content, filename, mime, folder_id)
+        storage = await _get_storage_backend(source, user_id)
+        result = storage.upload_file(content, filename, mime, folder_id)
 
         await audit_service.log_action(
             user_id=user_id,
             user_email=user_email,
-            service="DRIVE",
+            service=_storage_audit_service(source),
             action="UPLOAD_FILE",
             resource_id=result["id"],
             resource_title=filename,
-            details={"folder_id": folder_id, "mime_type": mime, "size": result.get("size")},
+            details={
+                "folder_id": folder_id,
+                "mime_type": mime,
+                "size": result.get("size"),
+                "source": source,
+            },
         )
 
         return FileUploadResponse(**result)
     except Exception as e:
-        _handle_google_error(e, "Google Drive")
+        _handle_storage_error(e, source)
 
 
 @router.delete("/drive/files/{file_id}", response_model=ServiceActionResponse)
 async def trash_drive_file(
     file_id: str,
+    source: str = SourceQuery,
     payload: Dict[str, Any] = Depends(get_current_user_payload),
 ):
-    """Envía un archivo a la papelera de Google Drive y registra la acción."""
+    """Envía un archivo a la papelera del origen indicado y registra la acción."""
     user_id = payload.get("sub")
     user_email = payload.get("email", "")
-    access_token = await _get_user_access_token(user_id)
 
     try:
-        drive = DriveService(access_token)
+        storage = await _get_storage_backend(source, user_id)
 
         # Get file info before trashing
         try:
-            file_info = drive.get_preview_info(file_id)
+            file_info = storage.get_preview_info(file_id)
             file_name = file_info.get("file_name", "Unknown")
         except Exception:
             file_name = "Unknown"
 
-        drive.trash_file(file_id)
+        storage.trash_file(file_id)
 
         await audit_service.log_action(
             user_id=user_id,
             user_email=user_email,
-            service="DRIVE",
+            service=_storage_audit_service(source),
             action="DELETE_FILE",
             resource_id=file_id,
             resource_title=file_name,
+            details={"source": source},
         )
 
         return ServiceActionResponse(success=True, message="Archivo enviado a la papelera exitosamente.")
     except Exception as e:
-        _handle_google_error(e, "Google Drive")
+        _handle_storage_error(e, source)
 
 
 @router.get("/drive/files/{file_id}/preview", response_model=DrivePreviewResponse)
 async def get_file_preview(
     file_id: str,
+    source: str = SourceQuery,
     payload: Dict[str, Any] = Depends(get_current_user_payload),
 ):
-    """Obtiene URL de previsualización y descarga de un archivo."""
+    """Obtiene metadatos de previsualización y descarga de un archivo del origen indicado."""
     user_id = payload.get("sub")
-    access_token = await _get_user_access_token(user_id)
 
     try:
-        drive = DriveService(access_token)
-        info = drive.get_preview_info(file_id)
+        storage = await _get_storage_backend(source, user_id)
+        info = storage.get_preview_info(file_id)
         return DrivePreviewResponse(**info)
     except Exception as e:
-        _handle_google_error(e, "Google Drive")
+        _handle_storage_error(e, source)
 
 
 @router.get("/drive/files/{file_id}/content")
 async def get_drive_file_content(
     file_id: str,
+    source: str = SourceQuery,
     payload: Dict[str, Any] = Depends(get_current_user_from_query_or_header),
 ):
     """
-    Descarga y sirve directamente el flujo binario del archivo/imagen de Google Drive
-    usando las credenciales autorizadas del usuario, permitiendo el renderizado confiable
-    en etiquetas <img> sin problemas de cookies de terceros o bloqueos CORS.
+    Descarga y sirve directamente el flujo binario del archivo/imagen (Google Drive o disco
+    del servidor) usando las credenciales autorizadas del usuario, permitiendo el renderizado
+    confiable en etiquetas <img>/<video> sin problemas de cookies de terceros o bloqueos CORS.
     """
     user_id = payload.get("sub")
-    access_token = await _get_user_access_token(user_id)
 
     try:
-        drive = DriveService(access_token)
-        content_bytes, mime_type, filename = drive.get_file_content(file_id)
+        storage = await _get_storage_backend(source, user_id)
+        content_bytes, mime_type, filename = storage.get_file_content(file_id)
 
         headers = {
             "Content-Disposition": f'inline; filename="{filename}"',
@@ -382,7 +434,7 @@ async def get_drive_file_content(
         }
         return Response(content=content_bytes, media_type=mime_type, headers=headers)
     except Exception as e:
-        _handle_google_error(e, "Google Drive")
+        _handle_storage_error(e, source)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -391,7 +443,7 @@ async def get_drive_file_content(
 
 @router.get("/audit-logs", response_model=AuditLogListResponse)
 async def get_audit_logs(
-    service: Optional[str] = Query(None, regex="^(GMAIL|DRIVE|CALENDAR)?$"),
+    service: Optional[str] = Query(None, regex="^(GMAIL|DRIVE|CALENDAR|SERVER)?$"),
     limit: int = Query(50, ge=1, le=200),
     payload: Dict[str, Any] = Depends(get_current_user_payload),
 ):

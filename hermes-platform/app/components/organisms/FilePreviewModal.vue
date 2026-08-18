@@ -1,25 +1,41 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import type { DriveFile, PreviewInfo } from '~/composables/useDriveBucket'
-import { useDriveBucket } from '~/composables/useDriveBucket'
+import type { DriveFile, PreviewInfo, StorageSource } from '~/composables/useDriveBucket'
+import { STORAGE_SOURCE_LABELS, useDriveBucket } from '~/composables/useDriveBucket'
 
-const props = defineProps<{
-  isOpen: boolean
-  file: DriveFile | null
-  previewInfo: PreviewInfo | null
-  loading?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    isOpen: boolean
+    file: DriveFile | null
+    previewInfo: PreviewInfo | null
+    loading?: boolean
+    source?: StorageSource
+  }>(),
+  {
+    loading: false,
+    source: 'drive'
+  }
+)
 
 const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
-const { getDriveFileContentUrl } = useDriveBucket()
+const { getFileContentUrl } = useDriveBucket()
 const imageLoadError = ref(false)
 
 watch(() => props.file, () => {
   imageLoadError.value = false
 })
+
+const isServerSource = computed(() => props.source === 'server')
+const sourceTag = computed(() => (isServerSource.value ? 'Servidor Hermes' : 'Drive Bucket'))
+const openLabel = computed(() =>
+  isServerSource.value ? 'Descargar del servidor' : `Abrir en ${STORAGE_SOURCE_LABELS.drive}`
+)
+
+/** Flujo binario servido por el proxy autenticado de la API (Drive o servidor). */
+const contentUrl = computed(() => (props.file ? getFileContentUrl(props.file.id, props.source) : ''))
 
 const fileCategory = computed(() => {
   if (!props.file) return 'file'
@@ -32,6 +48,8 @@ const fileCategory = computed(() => {
 })
 
 const previewUrl = computed(() => {
+  // El servidor local no tiene embeds externos: se incrusta el binario directamente.
+  if (isServerSource.value) return contentUrl.value
   if (props.previewInfo?.web_view_link) {
     // Replace /view with /preview for cleaner embed iframe
     return props.previewInfo.web_view_link.replace(/\/view(\?.*)?$/, '/preview')
@@ -41,12 +59,16 @@ const previewUrl = computed(() => {
 
 const imagePreviewSrc = computed(() => {
   if (imageLoadError.value || !props.file) return ''
-  return getDriveFileContentUrl(props.file.id) || props.previewInfo?.thumbnail_link || previewUrl.value
+  return contentUrl.value || props.previewInfo?.thumbnail_link || previewUrl.value
 })
 
 const directDownloadUrl = computed(() => {
+  if (isServerSource.value) return contentUrl.value || '#'
   return props.previewInfo?.web_content_link || props.previewInfo?.web_view_link || '#'
 })
+
+/** Los binarios del servidor se reproducen con players HTML5 nativos. */
+const useNativePlayer = computed(() => isServerSource.value && !!contentUrl.value)
 </script>
 
 <template>
@@ -57,7 +79,7 @@ const directDownloadUrl = computed(() => {
           <!-- Modal Header -->
           <div class="modal-top-bar">
             <div class="file-title-group">
-              <span class="service-tag">Drive Bucket</span>
+              <span class="service-tag" :class="{ 'is-server': isServerSource }">{{ sourceTag }}</span>
               <h3 class="file-name-header" :title="file?.name">{{ file?.name }}</h3>
             </div>
 
@@ -67,7 +89,7 @@ const directDownloadUrl = computed(() => {
                 :href="directDownloadUrl"
                 target="_blank"
                 class="btn-icon-action btn-download"
-                title="Abrir en Google Drive / Descargar"
+                :title="openLabel"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -109,21 +131,38 @@ const directDownloadUrl = computed(() => {
               <div v-else class="preview-fallback-box">
                 <p>No se pudo cargar la imagen previa.</p>
                 <a :href="directDownloadUrl" target="_blank" class="btn-download-direct">
-                  Abrir en Google Drive
+                  {{ openLabel }}
                 </a>
               </div>
             </div>
 
-            <!-- Video Player (HTML5 / Drive Embed) -->
+            <!-- Video Player (HTML5 nativo para el servidor / Embed de Drive) -->
             <div v-else-if="fileCategory === 'video'" class="video-preview-wrapper">
+              <video
+                v-if="useNativePlayer"
+                :src="contentUrl"
+                class="preview-media-native"
+                controls
+                playsinline
+              />
               <iframe
-                v-if="previewUrl"
+                v-else-if="previewUrl"
                 :src="previewUrl"
                 class="preview-iframe"
                 allow="autoplay"
                 allowfullscreen
               />
               <p v-else class="preview-fallback-text">No se pudo cargar el reproductor de video.</p>
+            </div>
+
+            <!-- Audio Player -->
+            <div v-else-if="fileCategory === 'audio'" class="generic-preview-wrapper">
+              <div class="generic-icon-box">🎧</div>
+              <p class="generic-name">{{ file?.name }}</p>
+              <audio v-if="contentUrl" :src="contentUrl" class="preview-audio-native" controls />
+              <a :href="directDownloadUrl" target="_blank" class="btn-download-direct">
+                {{ openLabel }}
+              </a>
             </div>
 
             <!-- PDF / Documents Embed Iframe -->
@@ -137,17 +176,17 @@ const directDownloadUrl = computed(() => {
               <div v-else class="preview-fallback-box">
                 <p>Este archivo no tiene una vista previa incrustada disponible.</p>
                 <a :href="directDownloadUrl" target="_blank" class="btn-download-direct">
-                  Abrir en Google Drive
+                  {{ openLabel }}
                 </a>
               </div>
             </div>
 
-            <!-- Generic / Audio -->
+            <!-- Generic -->
             <div v-else class="generic-preview-wrapper">
               <div class="generic-icon-box">📁</div>
               <p class="generic-name">{{ file?.name }}</p>
               <a :href="directDownloadUrl" target="_blank" class="btn-download-direct">
-                Descargar o ver en Google Drive
+                {{ openLabel }}
               </a>
             </div>
           </div>
@@ -208,6 +247,12 @@ const directDownloadUrl = computed(() => {
   border-radius: 6px;
   border: 1px solid rgba(0, 255, 198, 0.2);
   flex-shrink: 0;
+}
+
+.service-tag.is-server {
+  color: var(--hermes-accent-blue);
+  background: rgba(0, 229, 255, 0.1);
+  border-color: rgba(0, 229, 255, 0.25);
 }
 
 .file-name-header {
@@ -314,6 +359,18 @@ const directDownloadUrl = computed(() => {
   height: 100%;
   border: none;
   background: #111114;
+}
+
+.preview-media-native {
+  width: 100%;
+  height: 100%;
+  background: #000000;
+  outline: none;
+}
+
+.preview-audio-native {
+  width: 100%;
+  max-width: 420px;
 }
 
 .generic-preview-wrapper,
