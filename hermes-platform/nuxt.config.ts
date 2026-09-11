@@ -2,6 +2,9 @@
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
+  routeRules: {
+    '/api/**': { proxy: process.env.NUXT_API_PROXY_URL }
+  },
   css: [
     'bootstrap/dist/css/bootstrap.min.css',
     '~/assets/css/main.css'
